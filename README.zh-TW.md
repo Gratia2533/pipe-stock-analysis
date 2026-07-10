@@ -93,6 +93,11 @@ uv run pytest -q
 - 資料可用性、延遲和準確度取決於上游來源；重要資訊請自行交叉驗證。
 - 這是軟體，不是投資建議。
 
+## 參考來源與設計啟發
+
+- [FinMind](https://github.com/FinMind/FinMind/tree/master)：可選 FinMind 市場資料整合的上游開源專案。本 repo 不內嵌 FinMind 程式碼或任何憑證。
+- [TradingAgents](https://github.com/TauricResearch/TradingAgents)：作為角色導向研究流程的概念參考。本 server 刻意把資料取得與確定性計算，和 agent 編排及投資決策分開。
+
 ## 授權
 
 [MIT](LICENSE)

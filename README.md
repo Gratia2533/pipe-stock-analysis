@@ -93,6 +93,11 @@ uv run pytest -q
 - Data availability, latency, and accuracy depend on upstream providers. Verify material information independently.
 - This is software, not investment advice.
 
+## References and inspiration
+
+- [FinMind](https://github.com/FinMind/FinMind/tree/master): upstream open-source project behind the optional FinMind market-data integration. This repository does not vendor FinMind code or credentials.
+- [TradingAgents](https://github.com/TauricResearch/TradingAgents): conceptual reference for role-based research workflows. This server deliberately keeps data retrieval and deterministic calculations separate from agent orchestration and investment decisions.
+
 ## License
 
 [MIT](LICENSE)
