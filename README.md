@@ -69,7 +69,7 @@ For stdio, point your MCP client to `uv run finance-mcp` from this repository. C
 
 ## Analysis skill
 
-The reusable Hermes analysis workflow is included at [`skills/taiwan-stock-analysis/SKILL.md`](skills/taiwan-stock-analysis/SKILL.md). Install it from the raw GitHub URL after this repository is accessible to your Hermes instance:
+The reusable Hermes analysis workflow is included at [`skills/taiwan-stock-analysis/SKILL.md`](skills/taiwan-stock-analysis/SKILL.md). Because this repository is private, clone it on the Hermes host and copy the skill directory into `~/.hermes/skills/`. If you later make the repository public, install it directly from the raw GitHub URL:
 
 ```bash
 hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/taiwan-stock-analysis/SKILL.md
