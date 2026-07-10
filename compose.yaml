@@ -1,0 +1,12 @@
+services:
+  pipe-stock-analysis:
+    build: .
+    container_name: pipe-stock-analysis
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "finance-mcp"
+version = "0.1.0"
+description = "Read-only Taiwan market data and deterministic finance analytics MCP server"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.28,<1",
+  "mcp[cli]>=1.27,<2",
+]
+
+[project.scripts]
+finance-mcp = "finance_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/finance_mcp"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "ruff>=0.11,<1",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
