@@ -67,6 +67,14 @@ hermes mcp test pipe-stock-analysis
 
 For stdio, point your MCP client to `uv run finance-mcp` from this repository. Configure the command and its environment in your own local client configuration; never commit tokens into this repository.
 
+## Analysis skill
+
+The reusable Hermes analysis workflow is included at [`skills/taiwan-stock-analysis/SKILL.md`](skills/taiwan-stock-analysis/SKILL.md). Install it from the raw GitHub URL after this repository is accessible to your Hermes instance:
+
+```bash
+hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/taiwan-stock-analysis/SKILL.md
+```
+
 ## Optional OAuth
 
 OAuth is off by default. If you enable it, you must supply your own public HTTPS issuer/resource URLs and credentials through deployment secrets. Runtime OAuth data belongs in a persistent private volume and is excluded by `.gitignore`.

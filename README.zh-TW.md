@@ -67,6 +67,14 @@ hermes mcp test pipe-stock-analysis
 
 若使用 stdio，請在 MCP client 的本機設定中指向此 repo 內的 `uv run finance-mcp`，並把環境變數配置留在本機，不要提交 token。
 
+## 分析 Skill
+
+可重用的 Hermes 分析流程已放在 [`skills/taiwan-stock-analysis/SKILL.md`](skills/taiwan-stock-analysis/SKILL.md)。此 repo 可供你的 Hermes instance 存取後，透過 raw GitHub URL 安裝：
+
+```bash
+hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/taiwan-stock-analysis/SKILL.md
+```
+
 ## 可選 OAuth
 
 OAuth 預設關閉。若要開啟，你必須自行提供公開 HTTPS issuer/resource URL 與登入憑證，並透過部署平台的 secrets 傳入。OAuth 執行期資料必須放在私有 persistent volume，且已列入 `.gitignore`。
