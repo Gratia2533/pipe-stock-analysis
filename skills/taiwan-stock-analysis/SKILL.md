@@ -2,7 +2,7 @@
 name: taiwan-stock-analysis
 description: 使用 Finance MCP 編排台股多面向分析。
 version: 0.1.0
-author: Tommy Li, Hermes Agent
+author: Gratia
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
