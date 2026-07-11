@@ -1,4 +1,4 @@
-# pipe-stock-analysis
+# Pipe Stock Analysis
 
 可自行部署、唯讀的台股分析 **MCP (Model Context Protocol，讓 AI 用戶端呼叫外部工具的標準協定)** 伺服器。它負責取得市場資料與計算可重現指標；不做投資決策，也不下單。
 
