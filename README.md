@@ -1,4 +1,4 @@
-# pipe-stock-analysis
+# Pipe Stock Analysis
 
 Self-hostable, read-only Taiwan stock-analysis **MCP (Model Context Protocol, a standard for AI clients to invoke external tools)** server. It retrieves market data and computes reproducible indicators; it does not make investment decisions or place trades.
 
