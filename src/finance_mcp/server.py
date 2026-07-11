@@ -224,6 +224,94 @@ async def get_taiwan_stock_official_quote(
 
 
 @mcp.tool()
+async def get_taiwan_stock_market_indices(
+    query: str | None = None,
+    limit: int = 20,
+) -> list[dict[str, object]]:
+    """Get official TWSE market and sector indices, optionally filtered by name."""
+    if limit < 1 or limit > 100:
+        raise ValueError("limit must be between 1 and 100")
+    rows = await twse_client.fetch_market_indices()
+    if query and query.strip():
+        normalized_query = query.strip().casefold()
+        rows = [
+            row
+            for row in rows
+            if normalized_query in str(row.get("name", "")).casefold()
+        ]
+    return rows[:limit]
+
+
+@mcp.tool()
+async def get_taiwan_stock_etf_rankings(
+    query: str | None = None,
+    limit: int = 20,
+) -> list[dict[str, object]]:
+    """Get official TWSE ETF rankings by number of trading accounts."""
+    if limit < 1 or limit > 20:
+        raise ValueError("limit must be between 1 and 20")
+    rows = await twse_client.fetch_etf_rankings()
+    if query and query.strip():
+        normalized_query = query.strip().casefold()
+        rows = [
+            row
+            for row in rows
+            if normalized_query in str(row.get("etf_id", "")).casefold()
+            or normalized_query in str(row.get("name", "")).casefold()
+        ]
+    return rows[:limit]
+
+
+@mcp.tool()
+async def get_taiwan_stock_new_listings(
+    query: str | None = None,
+    limit: int = 20,
+) -> list[dict[str, object]]:
+    """Get the official TWSE listing pipeline; rows may be pending rather than completed IPOs."""
+    if limit < 1 or limit > 100:
+        raise ValueError("limit must be between 1 and 100")
+    rows = await twse_client.fetch_new_listings()
+    if query and query.strip():
+        normalized_query = query.strip().casefold()
+        searchable_fields = ("stock_id", "company_name", "underwriter", "note")
+        rows = [
+            row
+            for row in rows
+            if any(
+                normalized_query in str(row.get(field, "")).casefold()
+                for field in searchable_fields
+            )
+        ]
+    return rows[:limit]
+
+
+@mcp.tool()
+async def get_taiwan_stock_market_calendar(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, object]]:
+    """Get official TWSE holidays and special trading-day events for the published year."""
+    if limit < 1 or limit > 100:
+        raise ValueError("limit must be between 1 and 100")
+    parsed_start = date.fromisoformat(start_date) if start_date else None
+    parsed_end = date.fromisoformat(end_date) if end_date else None
+    if parsed_start and parsed_end and parsed_end < parsed_start:
+        raise ValueError("end_date must not be earlier than start_date")
+
+    rows = await twse_client.fetch_holiday_schedule()
+    filtered: list[dict[str, object]] = []
+    for row in rows:
+        row_date = date.fromisoformat(str(row["date"]))
+        if parsed_start and row_date < parsed_start:
+            continue
+        if parsed_end and row_date > parsed_end:
+            continue
+        filtered.append(row)
+    return filtered[:limit]
+
+
+@mcp.tool()
 async def get_taiwan_stock_material_announcements(
     stock_id: str,
     market: OfficialMarket = "auto",

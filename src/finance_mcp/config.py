@@ -46,6 +46,10 @@ class Settings:
     finmind_token: str | None
     twse_stock_day_url: str
     twse_daily_all_url: str
+    twse_market_index_url: str
+    twse_etf_ranking_url: str
+    twse_new_listing_url: str
+    twse_holiday_schedule_url: str
     tpex_daily_close_url: str
     twse_material_info_url: str
     tpex_material_info_url: str
@@ -90,6 +94,22 @@ class Settings:
             twse_daily_all_url=os.getenv(
                 "TWSE_DAILY_ALL_URL",
                 "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL",
+            ),
+            twse_market_index_url=os.getenv(
+                "TWSE_MARKET_INDEX_URL",
+                "https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX",
+            ),
+            twse_etf_ranking_url=os.getenv(
+                "TWSE_ETF_RANKING_URL",
+                "https://openapi.twse.com.tw/v1/ETFReport/ETFRank",
+            ),
+            twse_new_listing_url=os.getenv(
+                "TWSE_NEW_LISTING_URL",
+                "https://openapi.twse.com.tw/v1/company/newlisting",
+            ),
+            twse_holiday_schedule_url=os.getenv(
+                "TWSE_HOLIDAY_SCHEDULE_URL",
+                "https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule",
             ),
             tpex_daily_close_url=os.getenv(
                 "TPEX_DAILY_CLOSE_URL",

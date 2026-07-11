@@ -17,6 +17,7 @@ Run your own instance. This project does **not** route other people to the maint
 
 - Historical prices with FinMind → TWSE fallback
 - Latest TWSE / TPEx official close quotes
+- TWSE market and sector indices, ETF rankings, listing/IPO pipeline, and trading calendar
 - Valuation, monthly revenue, institutional flows, financial reports, margin trading
 - MOPS material announcements and recent news
 - Deterministic technical, fundamental, financial-health, institutional-flow, and margin summaries
