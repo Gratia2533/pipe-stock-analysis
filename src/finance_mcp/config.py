@@ -44,6 +44,8 @@ def _get_transport() -> McpTransport:
 class Settings:
     finmind_base_url: str
     finmind_token: str | None
+    finnhub_base_url: str
+    finnhub_api_key: str | None
     twse_stock_day_url: str
     twse_daily_all_url: str
     twse_market_index_url: str
@@ -87,6 +89,8 @@ class Settings:
                 "https://api.finmindtrade.com/api/v4/data",
             ),
             finmind_token=os.getenv("FINMIND_TOKEN"),
+            finnhub_base_url=os.getenv("FINNHUB_BASE_URL", "https://finnhub.io/api/v1"),
+            finnhub_api_key=os.getenv("FINNHUB_API_KEY"),
             twse_stock_day_url=os.getenv(
                 "TWSE_STOCK_DAY_URL",
                 "https://www.twse.com.tw/exchangeReport/STOCK_DAY",

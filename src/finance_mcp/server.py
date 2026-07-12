@@ -22,6 +22,12 @@ from finance_mcp.infra.logging import configure_logging, log_context
 from finance_mcp.oauth import FinanceOAuthProvider
 from finance_mcp.providers.announcements import MaterialAnnouncementClient
 from finance_mcp.providers.finmind import FinMindClient
+from finance_mcp.providers.finnhub import (
+    CandleResolution,
+    FinancialFrequency,
+    FinancialStatement,
+    FinnhubClient,
+)
 from finance_mcp.providers.news import NewsSource, TaiwanStockNewsClient
 from finance_mcp.providers.tpex import TpexClient
 from finance_mcp.providers.twse import TwseClient
@@ -81,6 +87,16 @@ def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
 
 mcp, oauth_provider = _create_mcp()
 client = FinMindClient()
+finnhub_client = FinnhubClient(
+    base_url=settings.finnhub_base_url,
+    api_key=settings.finnhub_api_key,
+    timeout_seconds=settings.request_timeout_seconds,
+    max_attempts=settings.request_max_attempts,
+    retry_base_seconds=settings.request_retry_base_seconds,
+    max_concurrency=settings.request_max_concurrency,
+    cache_ttl_seconds=settings.cache_ttl_seconds,
+    cache_max_entries=settings.cache_max_entries,
+)
 twse_client = TwseClient()
 tpex_client = TpexClient()
 announcement_client = MaterialAnnouncementClient()
@@ -199,6 +215,79 @@ async def _fetch_official_quote(
 def health() -> dict[str, str]:
     """Return the Finance MCP service status."""
     return {"status": "ok", "service": "finance-mcp", "mode": "read-only"}
+
+
+@mcp.tool()
+async def search_global_stock_symbols(query: str, limit: int = 10) -> list[dict[str, object]]:
+    """Search global stock symbols through Finnhub; availability depends on the API plan."""
+    if not query.strip():
+        raise ValueError("query must not be empty")
+    if limit < 1 or limit > 100:
+        raise ValueError("limit must be between 1 and 100")
+    return await finnhub_client.search_symbols(query.strip(), limit)
+
+
+@mcp.tool()
+async def get_global_stock_quote(symbol: str) -> dict[str, object]:
+    """Get a current global stock quote from Finnhub."""
+    return await finnhub_client.fetch_quote(symbol.strip().upper())
+
+
+@mcp.tool()
+async def get_global_stock_prices(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    resolution: CandleResolution = "D",
+) -> dict[str, object]:
+    """Get global stock candles from Finnhub; endpoint access depends on the API plan."""
+    parsed_start, parsed_end = _parse_date_range(start_date, end_date)
+    if parsed_end is None:
+        raise ValueError("end_date is required")
+    return await finnhub_client.fetch_candles(
+        symbol.strip().upper(), parsed_start, parsed_end, resolution
+    )
+
+
+@mcp.tool()
+async def get_global_stock_profile(symbol: str) -> dict[str, object]:
+    """Get company profile data for a global stock symbol from Finnhub."""
+    return await finnhub_client.fetch_profile(symbol.strip().upper())
+
+
+@mcp.tool()
+async def get_global_stock_basic_financials(
+    symbol: str, metric: str = "all"
+) -> dict[str, object]:
+    """Get Finnhub basic financial metrics for a global stock symbol."""
+    return await finnhub_client.fetch_basic_financials(symbol.strip().upper(), metric)
+
+
+@mcp.tool()
+async def get_global_stock_financial_reports(
+    symbol: str,
+    statement: FinancialStatement = "bs",
+    frequency: FinancialFrequency = "annual",
+) -> dict[str, object]:
+    """Get Finnhub standardized financial statements for a global stock symbol."""
+    return await finnhub_client.fetch_financial_reports(
+        symbol.strip().upper(), statement, frequency
+    )
+
+
+@mcp.tool()
+async def get_global_stock_news(
+    symbol: str, start_date: str, end_date: str, limit: int = 10
+) -> list[dict[str, object]]:
+    """Get dated company news from Finnhub, limited to at most 20 rows."""
+    if limit < 1 or limit > 20:
+        raise ValueError("limit must be between 1 and 20")
+    parsed_start, parsed_end = _parse_date_range(start_date, end_date)
+    if parsed_end is None:
+        raise ValueError("end_date is required")
+    return await finnhub_client.fetch_company_news(
+        symbol.strip().upper(), parsed_start, parsed_end, limit
+    )
 
 
 @mcp.tool()

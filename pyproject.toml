@@ -5,9 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "finance-mcp"
 version = "0.1.0"
-description = "Read-only Taiwan market data and deterministic finance analytics MCP server"
+description = "Read-only Taiwan and global market data MCP server with deterministic analytics"
 readme = "README.md"
 requires-python = ">=3.11"
+keywords = ["finance", "stocks", "mcp", "finmind", "finnhub", "market-data"]
 dependencies = [
   "httpx>=0.28,<1",
   "mcp[cli]>=1.27,<2",

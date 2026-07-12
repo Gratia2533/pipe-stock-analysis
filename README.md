@@ -1,6 +1,6 @@
 # Pipe Stock Analysis
 
-Self-hostable, read-only Taiwan stock-analysis **MCP (Model Context Protocol, a standard for AI clients to invoke external tools)** server. It retrieves market data and computes reproducible indicators; it does not make investment decisions or place trades.
+Self-hostable, read-only financial-market **MCP (Model Context Protocol, a standard for AI clients to invoke external tools)** server for Taiwan-listed securities and global stocks. It retrieves market data and computes reproducible indicators; it does not make investment decisions or place trades.
 
 [繁體中文](README.zh-TW.md)
 
@@ -8,7 +8,7 @@ Self-hostable, read-only Taiwan stock-analysis **MCP (Model Context Protocol, a 
 
 Run your own instance. This project does **not** route other people to the maintainer's server, bundle a FinMind token, or require a hosted account.
 
-- Your `FINMIND_TOKEN` stays in your local `.env` or deployment secret store.
+- Your `FINMIND_TOKEN` and `FINNHUB_API_KEY` stay in your local `.env` or deployment secret store.
 - The token is read only from the server process environment, never from an MCP tool argument.
 - `.env`, OAuth state, private keys, SQLite databases, and generated credentials are ignored by Git.
 - FinMind is optional, but anonymous usage has lower limits. Get your own token from [FinMind](https://finmindtrade.com/).
@@ -21,8 +21,7 @@ Run your own instance. This project does **not** route other people to the maint
 - Valuation, monthly revenue, institutional flows, financial reports, margin trading
 - MOPS material announcements and recent news
 - Deterministic technical, fundamental, financial-health, institutional-flow, and margin summaries
-
-Current coverage is Taiwan-listed securities. The generic repository name is intentional; do not mistake it for global-market coverage.
+- Finnhub global symbol search, quotes, candles, company profiles, financial metrics, reported statements, and company news
 
 ## Quick start: Docker Compose
 
@@ -30,7 +29,7 @@ Current coverage is Taiwan-listed securities. The generic repository name is int
 git clone https://github.com/Gratia2533/pipe-stock-analysis.git
 cd pipe-stock-analysis
 cp .env.example .env
-# Edit .env and add your own FINMIND_TOKEN
+# Edit .env and add your own FINMIND_TOKEN and FINNHUB_API_KEY as needed
 
 docker compose up -d --build
 curl http://127.0.0.1:8000/healthz
@@ -97,6 +96,7 @@ uv run pytest -q
 ## References and inspiration
 
 - [FinMind](https://github.com/FinMind/FinMind/tree/master): upstream open-source project behind the optional FinMind market-data integration. This repository does not vendor FinMind code or credentials.
+- [Finnhub](https://finnhub.io/): optional upstream provider for global-stock data. Endpoint availability depends on the user's Finnhub plan.
 - [TradingAgents](https://github.com/TauricResearch/TradingAgents): conceptual reference for role-based research workflows. This server deliberately keeps data retrieval and deterministic calculations separate from agent orchestration and investment decisions.
 
 ## License

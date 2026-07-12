@@ -1,6 +1,6 @@
 # Pipe Stock Analysis
 
-可自行部署、唯讀的台股分析 **MCP (Model Context Protocol，讓 AI 用戶端呼叫外部工具的標準協定)** 伺服器。它負責取得市場資料與計算可重現指標；不做投資決策，也不下單。
+可自行部署、唯讀的金融市場 **MCP (Model Context Protocol，讓 AI 用戶端呼叫外部工具的標準協定)** 伺服器，涵蓋台灣上市櫃標的與全球股票。它負責取得市場資料與計算可重現指標；不做投資決策，也不下單。
 
 [English](README.md)
 
@@ -8,7 +8,7 @@
 
 每個人部署自己的 instance，不會把使用者導向維護者的 server、不內建 FinMind token，也不要求使用任何代管帳號。
 
-- `FINMIND_TOKEN` 只留在你的本機 `.env` 或部署平台的 secret store。
+- `FINMIND_TOKEN` 與 `FINNHUB_API_KEY` 只留在你的本機 `.env` 或部署平台的 secret store。
 - token 只由 server process 的環境變數讀取，絕不從 MCP tool argument 傳入。
 - `.env`、OAuth state、私鑰、SQLite 資料庫與自動產生的憑證都被 Git 忽略。
 - FinMind 是可選項，但匿名額度較低。請自行到 [FinMind](https://finmindtrade.com/) 取得 token。
@@ -21,8 +21,7 @@
 - 估值、月營收、法人買賣、財務三表、融資融券
 - MOPS 重大訊息與近期新聞
 - 可重現的技術面、基本面、財務健康、法人流向與融資融券摘要
-
-目前資料範圍是台灣上市櫃標的。repo 名稱故意不綁地區，但別誤認它支援全球市場。
+- Finnhub 全球股票代碼搜尋、報價、K 線、公司資料、財務指標、財報與公司新聞
 
 ## 快速啟動：Docker Compose
 
@@ -30,7 +29,7 @@
 git clone https://github.com/Gratia2533/pipe-stock-analysis.git
 cd pipe-stock-analysis
 cp .env.example .env
-# 編輯 .env，填入你自己的 FINMIND_TOKEN
+# 編輯 .env，依需求填入自己的 FINMIND_TOKEN 與 FINNHUB_API_KEY
 
 docker compose up -d --build
 curl http://127.0.0.1:8000/healthz
@@ -97,6 +96,7 @@ uv run pytest -q
 ## 參考來源與設計啟發
 
 - [FinMind](https://github.com/FinMind/FinMind/tree/master)：可選 FinMind 市場資料整合的上游開源專案。本 repo 不內嵌 FinMind 程式碼或任何憑證。
+- [Finnhub](https://finnhub.io/)：全球股票資料的可選上游來源；可用 endpoint 取決於使用者自己的 Finnhub 方案。
 - [TradingAgents](https://github.com/TauricResearch/TradingAgents)：作為角色導向研究流程的概念參考。本 server 刻意把資料取得與確定性計算，和 agent 編排及投資決策分開。
 
 ## 授權
