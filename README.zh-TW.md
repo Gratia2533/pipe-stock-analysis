@@ -69,10 +69,10 @@ hermes mcp test pipe-stock-analysis
 
 ## 分析 Skill
 
-可重用的 Hermes 分析流程已放在 [`skills/taiwan-stock-analysis/SKILL.md`](skills/taiwan-stock-analysis/SKILL.md)。此 repo 目前是 private，請在 Hermes host clone 後，將 skill 目錄複製到 `~/.hermes/skills/`。未來若改為 public，才可透過 raw GitHub URL 直接安裝：
+可重用的跨市場 Hermes 分析流程已放在 [`skills/stock-analysis/SKILL.md`](skills/stock-analysis/SKILL.md)，可透過 raw GitHub URL 安裝：
 
 ```bash
-hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/taiwan-stock-analysis/SKILL.md
+hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/stock-analysis/SKILL.md
 ```
 
 ## 可選 OAuth
