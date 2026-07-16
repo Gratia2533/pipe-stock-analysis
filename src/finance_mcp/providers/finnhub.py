@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
+
+from finance_mcp.action_client import ActionClient
 
 FinancialStatement = Literal["bs", "ic", "cf"]
 FinancialFrequency = Literal["annual", "quarterly"]
 CandleResolution = Literal["1", "5", "15", "30", "60", "D", "W", "M"]
 
 
-class ActionClient(Protocol):
-    async def call(self, action_id: str, action_input: dict[str, Any]) -> Any: ...
-
-
 class FinnhubClient:
-    """Read-only Finnhub client routed through curated OpenConnector actions."""
+    """Read-only Finnhub client routed through the selected finance Action adapter."""
 
     def __init__(self, *, connector: ActionClient) -> None:
         self._connector = connector

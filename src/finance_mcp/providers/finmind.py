@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Protocol
+from typing import Any
 
-
-class ActionClient(Protocol):
-    async def call(self, action_id: str, action_input: dict[str, Any]) -> Any: ...
-
+from finance_mcp.action_client import ActionClient
 
 _DATASET_ACTIONS = {
     "TaiwanStockPrice": "finmind.get_stock_prices",
