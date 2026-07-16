@@ -8,8 +8,8 @@
 
 每個人部署自己的 instance，不會把使用者導向維護者的 server、不內建 FinMind token，也不要求使用任何代管帳號。
 
-- `FINMIND_TOKEN` 與 `FINNHUB_API_KEY` 只留在你的本機 `.env` 或部署平台的 secret store。
-- token 只由 server process 的環境變數讀取，絕不從 MCP tool argument 傳入。
+- `FINMIND_TOKEN` 與 `FINNHUB_API_KEY` 只存放於專用 OpenConnector 的加密 credential store。
+- 本服務只持有 OpenConnector runtime token，且只能呼叫明確允許的金融 Actions。
 - `.env`、OAuth state、私鑰、SQLite 資料庫與自動產生的憑證都被 Git 忽略。
 - FinMind 是可選項，但匿名額度較低。請自行到 [FinMind](https://finmindtrade.com/) 取得 token。
 
@@ -29,15 +29,15 @@
 git clone https://github.com/Gratia2533/pipe-stock-analysis.git
 cd pipe-stock-analysis
 cp .env.example .env
-# 編輯 .env，依需求填入自己的 FINMIND_TOKEN 與 FINNHUB_API_KEY
+# 將 .env 指向專用 OpenConnector，且只填入它的 runtime token
 
 docker compose up -d --build
-curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8010/healthz
 ```
 
-MCP endpoint：`http://127.0.0.1:8000/mcp`
+MCP endpoint：`http://127.0.0.1:8010/mcp`
 
-Compose 預設只綁定 `127.0.0.1`。不要把未驗證的 MCP endpoint 直接暴露在公網。
+Compose 使用 Linux／WSL host networking，讓 container 能存取 `127.0.0.1:8001` 的專用 connector；MCP 本身仍只綁定 `127.0.0.1:8010`。不要把未驗證的 MCP endpoint 直接暴露在公網。
 
 ## 本機開發
 
@@ -61,7 +61,7 @@ MCP_TRANSPORT=stdio uv run finance-mcp
 本機 HTTP 部署可直接加入：
 
 ```bash
-hermes mcp add pipe-stock-analysis --url http://127.0.0.1:8000/mcp
+hermes mcp add pipe-stock-analysis --url http://127.0.0.1:8010/mcp
 hermes mcp test pipe-stock-analysis
 ```
 

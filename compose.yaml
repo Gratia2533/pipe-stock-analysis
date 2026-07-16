@@ -1,12 +1,16 @@
 services:
-  pipe-stock-analysis:
+  finance-mcp:
     build: .
-    container_name: pipe-stock-analysis
-    env_file:
-      - .env
-    ports:
-      - "127.0.0.1:8000:8000"
     restart: unless-stopped
-    read_only: true
-    tmpfs:
-      - /tmp
+    # Linux/WSL only: host networking makes the dedicated loopback connector
+    # at 127.0.0.1:8001 reachable without exposing either service externally.
+    network_mode: host
+    environment:
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 127.0.0.1
+      MCP_PORT: "8010"
+      MCP_STREAMABLE_HTTP_PATH: /mcp
+      MCP_STATELESS_HTTP: "true"
+      OPEN_CONNECTOR_BASE_URL: http://127.0.0.1:8001
+      OPEN_CONNECTOR_RUNTIME_TOKEN: "${OPEN_CONNECTOR_RUNTIME_TOKEN:?set OPEN_CONNECTOR_RUNTIME_TOKEN}"
+      OPEN_CONNECTOR_MAX_RESPONSE_BYTES: "4194304"

@@ -8,8 +8,8 @@ Self-hostable, read-only financial-market **MCP (Model Context Protocol, a stand
 
 Run your own instance. This project does **not** route other people to the maintainer's server, bundle a FinMind token, or require a hosted account.
 
-- Your `FINMIND_TOKEN` and `FINNHUB_API_KEY` stay in your local `.env` or deployment secret store.
-- The token is read only from the server process environment, never from an MCP tool argument.
+- Your `FINMIND_TOKEN` and `FINNHUB_API_KEY` stay in a dedicated OpenConnector encrypted credential store.
+- This process receives only an OpenConnector runtime token and can call only the curated finance Action allowlist.
 - `.env`, OAuth state, private keys, SQLite databases, and generated credentials are ignored by Git.
 - FinMind is optional, but anonymous usage has lower limits. Get your own token from [FinMind](https://finmindtrade.com/).
 
@@ -29,15 +29,15 @@ Run your own instance. This project does **not** route other people to the maint
 git clone https://github.com/Gratia2533/pipe-stock-analysis.git
 cd pipe-stock-analysis
 cp .env.example .env
-# Edit .env and add your own FINMIND_TOKEN and FINNHUB_API_KEY as needed
+# Point .env at your dedicated OpenConnector and add only its runtime token.
 
 docker compose up -d --build
-curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8010/healthz
 ```
 
-MCP endpoint: `http://127.0.0.1:8000/mcp`
+MCP endpoint: `http://127.0.0.1:8010/mcp`
 
-The Compose port binds to `127.0.0.1` deliberately. Do not expose an unauthenticated MCP endpoint to the public internet.
+The Compose setup uses Linux/WSL host networking so the container can reach the dedicated connector at `127.0.0.1:8001`; the MCP itself still binds only to `127.0.0.1:8010`. Do not expose an unauthenticated MCP endpoint to the public internet.
 
 ## Local development
 
@@ -61,7 +61,7 @@ MCP_TRANSPORT=stdio uv run finance-mcp
 For a local HTTP deployment:
 
 ```bash
-hermes mcp add pipe-stock-analysis --url http://127.0.0.1:8000/mcp
+hermes mcp add pipe-stock-analysis --url http://127.0.0.1:8010/mcp
 hermes mcp test pipe-stock-analysis
 ```
 
