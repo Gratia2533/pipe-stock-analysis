@@ -1,11 +1,13 @@
+# Linux/WSL advanced deployment for an OpenConnector bound to host loopback.
 services:
   finance-mcp:
     build: .
     restart: unless-stopped
+    network_mode: host
     environment:
-      DATA_BACKEND: direct
-      FINMIND_TOKEN: "${FINMIND_TOKEN:-}"
-      FINNHUB_API_KEY: "${FINNHUB_API_KEY:-}"
+      DATA_BACKEND: openconnector
+      OPEN_CONNECTOR_BASE_URL: "${OPEN_CONNECTOR_BASE_URL:-http://127.0.0.1:8001}"
+      OPEN_CONNECTOR_RUNTIME_TOKEN: "${OPEN_CONNECTOR_RUNTIME_TOKEN:?set OPEN_CONNECTOR_RUNTIME_TOKEN}"
       UPSTREAM_MAX_RESPONSE_BYTES: "${UPSTREAM_MAX_RESPONSE_BYTES:-4194304}"
       REQUEST_TIMEOUT_SECONDS: "${REQUEST_TIMEOUT_SECONDS:-15}"
       REQUEST_MAX_ATTEMPTS: "${REQUEST_MAX_ATTEMPTS:-3}"
@@ -14,8 +16,8 @@ services:
       CACHE_TTL_SECONDS: "${CACHE_TTL_SECONDS:-300}"
       CACHE_MAX_ENTRIES: "${CACHE_MAX_ENTRIES:-256}"
       MCP_TRANSPORT: streamable-http
-      MCP_HOST: 0.0.0.0
-      MCP_PORT: "8010"
+      MCP_HOST: 127.0.0.1
+      MCP_PORT: "${MCP_PORT:-8010}"
       MCP_STREAMABLE_HTTP_PATH: /mcp
       MCP_STATELESS_HTTP: "true"
       FINANCE_OAUTH_ENABLED: "${FINANCE_OAUTH_ENABLED:-false}"
@@ -25,5 +27,3 @@ services:
       FINANCE_OAUTH_PASSWORD: "${FINANCE_OAUTH_PASSWORD:-}"
       FINANCE_OAUTH_DATABASE_PATH: "${FINANCE_OAUTH_DATABASE_PATH:-/data/oauth/state.sqlite3}"
       FINANCE_OAUTH_SCOPE: "${FINANCE_OAUTH_SCOPE:-finance:read}"
-    ports:
-      - "127.0.0.1:${MCP_PORT:-8010}:8010"

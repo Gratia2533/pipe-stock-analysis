@@ -6,6 +6,7 @@
 __pycache__
 .pytest_cache
 .ruff_cache
+PROJECT_STATUS.md
 data
 *.sqlite
 *.sqlite3
