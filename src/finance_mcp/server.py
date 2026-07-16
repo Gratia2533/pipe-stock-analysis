@@ -4,10 +4,12 @@ import asyncio
 import logging
 from datetime import date, timedelta
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -40,6 +42,44 @@ configure_logging()
 logger = logging.getLogger("finance_mcp.server")
 
 
+def _oauth_transport_security(issuer_url: str) -> TransportSecuritySettings:
+    """Allow the public OAuth host while retaining DNS-rebinding protection."""
+    parsed_issuer = urlsplit(issuer_url)
+    if not parsed_issuer.scheme or not parsed_issuer.netloc:
+        raise ValueError("FINANCE_OAUTH_ISSUER_URL must be an absolute URL")
+
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            parsed_issuer.netloc,
+            "127.0.0.1:*",
+            "localhost:*",
+            "[::1]:*",
+        ],
+        allowed_origins=[
+            f"{parsed_issuer.scheme}://{parsed_issuer.netloc}",
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://[::1]:*",
+        ],
+    )
+
+
+def _enable_cimd_metadata() -> None:
+    """Advertise URL-based Client ID Metadata Document support."""
+    from mcp.server.auth import routes
+
+    original_build_metadata = routes.build_metadata
+
+    def build_metadata_with_cimd(*args, **kwargs):
+        metadata = original_build_metadata(*args, **kwargs)
+        metadata.client_id_metadata_document_supported = True
+        metadata.token_endpoint_auth_methods_supported = ["none"]
+        return metadata
+
+    routes.build_metadata = build_metadata_with_cimd
+
+
 def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
     common_options = {
         "host": settings.mcp_host,
@@ -55,6 +95,7 @@ def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
             "FINANCE_OAUTH_ENABLED=true"
         )
 
+    _enable_cimd_metadata()
     provider = FinanceOAuthProvider(
         issuer_url=settings.finance_oauth_issuer_url,
         resource_url=settings.finance_oauth_resource_url,
@@ -70,7 +111,7 @@ def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
         resource_server_url=AnyHttpUrl(settings.finance_oauth_resource_url),
         required_scopes=[settings.finance_oauth_scope],
         client_registration_options=ClientRegistrationOptions(
-            enabled=True,
+            enabled=False,
             valid_scopes=[settings.finance_oauth_scope],
             default_scopes=[settings.finance_oauth_scope],
         ),
@@ -81,6 +122,7 @@ def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
             "finance-mcp",
             auth_server_provider=provider,
             auth=auth,
+            transport_security=_oauth_transport_security(settings.finance_oauth_issuer_url),
             **common_options,
         ),
         provider,

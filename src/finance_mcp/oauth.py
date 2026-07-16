@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import html
+import ipaddress
 import json
 import os
 import secrets
+import socket
 import sqlite3
 import threading
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode, urlsplit
 
+import httpx
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
@@ -21,7 +25,7 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, ValidationError
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
@@ -57,6 +61,7 @@ class FinanceOAuthProvider(
         self.refresh_token_ttl_seconds = refresh_token_ttl_seconds
         self._database_path = Path(database_path)
         self._lock = threading.RLock()
+        self._cimd_cache: dict[str, tuple[float, OAuthClientInformationFull]] = {}
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         self.password = password or self._load_or_create_password()
         self._initialize_database()
@@ -139,12 +144,103 @@ class FinanceOAuthProvider(
             connection.execute(f"DELETE FROM {table} WHERE {key_column} = ?", (key,))
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        return self._get_model(
+        registered_client = self._get_model(
             "oauth_clients",
             "client_id",
             client_id,
             OAuthClientInformationFull,
         )
+        if registered_client is not None:
+            return registered_client
+        if not client_id.startswith("https://"):
+            return None
+
+        cached = self._cimd_cache.get(client_id)
+        if cached is not None and cached[0] > time.monotonic():
+            return cached[1]
+
+        client = await self._load_cimd_client(client_id)
+        if client is not None:
+            self._cimd_cache[client_id] = (time.monotonic() + 300, client)
+        return client
+
+    @staticmethod
+    async def _validate_public_cimd_url(client_id: str) -> None:
+        parsed = urlsplit(client_id)
+        decoded_path = unquote(parsed.path)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or not parsed.path
+            or parsed.path == "/"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+            or any(segment in {".", ".."} for segment in decoded_path.split("/"))
+        ):
+            raise ValueError("Invalid CIMD client_id URL")
+
+        loop = asyncio.get_running_loop()
+        addresses = await loop.getaddrinfo(
+            parsed.hostname,
+            parsed.port or 443,
+            type=socket.SOCK_STREAM,
+        )
+        if not addresses:
+            raise ValueError("CIMD hostname did not resolve")
+        for address in addresses:
+            if not ipaddress.ip_address(address[4][0]).is_global:
+                raise ValueError("CIMD hostname resolves to a non-public address")
+
+    async def _load_cimd_client(self, client_id: str) -> OAuthClientInformationFull | None:
+        try:
+            await self._validate_public_cimd_url(client_id)
+            async with (
+                httpx.AsyncClient(
+                    timeout=httpx.Timeout(5.0, connect=3.0),
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as client,
+                client.stream(
+                    "GET",
+                    client_id,
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "finance-mcp-cimd/1.0",
+                    },
+                ) as response,
+            ):
+                if response.status_code != 200:
+                    return None
+                if "json" not in response.headers.get("content-type", "").lower():
+                    return None
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if len(body) > 64 * 1024:
+                        return None
+
+            metadata = json.loads(body)
+            if not isinstance(metadata, dict) or metadata.get("client_id") != client_id:
+                return None
+            if not isinstance(metadata.get("client_name"), str):
+                return None
+            redirect_uris = metadata.get("redirect_uris")
+            if not isinstance(redirect_uris, list) or not redirect_uris:
+                return None
+            if metadata.get("token_endpoint_auth_method", "none") != "none":
+                return None
+            metadata["token_endpoint_auth_method"] = "none"
+            metadata["scope"] = self.scope
+            return OAuthClientInformationFull.model_validate(metadata)
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            OSError,
+            ValidationError,
+            ValueError,
+        ):
+            return None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         if not client_info.client_id:
@@ -210,15 +306,13 @@ class FinanceOAuthProvider(
 
         safe_state = html.escape(state, quote=True)
         safe_action = html.escape(f"{self.issuer_url}/login/callback", quote=True)
-        error_html = (
-            f'<div class="error">{html.escape(error)}</div>' if error else ""
-        )
+        error_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
         content = f"""<!doctype html>
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Taiwan Finance MCP Authorization</title>
+<title>Finance MCP Authorization</title>
 <style>
 body {{
   font-family: system-ui, -apple-system, sans-serif;
@@ -275,8 +369,8 @@ button {{
 </style>
 </head>
 <body><main>
-<h1>授權 Taiwan Finance MCP</h1>
-<p>登入後，ChatGPT 只能呼叫唯讀台股資料與分析工具，不具備下單或帳戶操作能力。</p>
+<h1>授權 Finance MCP</h1>
+<p>登入後，ChatGPT 只能呼叫唯讀股票資料與分析工具，不具備下單或帳戶操作能力。</p>
 {error_html}
 <form action="{safe_action}" method="post">
 <input type="hidden" name="state" value="{safe_state}">
@@ -319,9 +413,7 @@ button {{
             code=authorization_code_value,
             client_id=state_data["client_id"],
             redirect_uri=AnyHttpUrl(state_data["redirect_uri"]),
-            redirect_uri_provided_explicitly=bool(
-                state_data["redirect_uri_provided_explicitly"]
-            ),
+            redirect_uri_provided_explicitly=bool(state_data["redirect_uri_provided_explicitly"]),
             expires_at=time.time() + 300,
             scopes=list(state_data["scopes"]),
             code_challenge=state_data["code_challenge"],
