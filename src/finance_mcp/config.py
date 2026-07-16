@@ -115,9 +115,7 @@ class Settings:
             data_backend=data_backend,
             finmind_token=finmind_token if data_backend == "direct" else "",
             finnhub_api_key=finnhub_api_key if data_backend == "direct" else "",
-            open_connector_base_url=os.getenv(
-                "OPEN_CONNECTOR_BASE_URL", "http://127.0.0.1:8001"
-            ),
+            open_connector_base_url=os.getenv("OPEN_CONNECTOR_BASE_URL", "http://127.0.0.1:8001"),
             open_connector_runtime_token=os.getenv("OPEN_CONNECTOR_RUNTIME_TOKEN", ""),
             upstream_max_response_bytes=_get_upstream_max_response_bytes(),
             twse_stock_day_url=os.getenv(

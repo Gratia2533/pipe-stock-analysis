@@ -90,8 +90,7 @@ def moving_average_convergence_divergence(
     fast = exponential_moving_average_series(values, fast_span)
     slow = exponential_moving_average_series(values, slow_span)
     macd_series = [
-        fast_value - slow_value
-        for fast_value, slow_value in zip(fast, slow, strict=True)
+        fast_value - slow_value for fast_value, slow_value in zip(fast, slow, strict=True)
     ]
     signal = exponential_moving_average(macd_series, signal_span)
     macd = macd_series[-1]
@@ -108,9 +107,7 @@ def summarize_prices(rows: Sequence[dict[str, object]]) -> dict[str, float | int
     result: dict[str, float | int | str] = {
         "date": str(latest["date"]),
         "close": closes[-1],
-        "change_percent": ((closes[-1] / closes[-2]) - 1.0) * 100.0
-        if len(closes) >= 2
-        else 0.0,
+        "change_percent": ((closes[-1] / closes[-2]) - 1.0) * 100.0 if len(closes) >= 2 else 0.0,
         "sample_size": len(ordered_rows),
     }
 

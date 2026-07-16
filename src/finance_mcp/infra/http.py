@@ -76,10 +76,13 @@ class JsonHttpClient:
                 return cached
 
         request_id = uuid4().hex
-        async with self._semaphore, httpx.AsyncClient(
-            timeout=self._timeout,
-            transport=self._transport,
-        ) as client:
+        async with (
+            self._semaphore,
+            httpx.AsyncClient(
+                timeout=self._timeout,
+                transport=self._transport,
+            ) as client,
+        ):
             for attempt in range(1, self._max_attempts + 1):
                 started_at = time.monotonic()
                 try:

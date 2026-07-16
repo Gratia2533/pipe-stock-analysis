@@ -49,14 +49,10 @@ def summarize_margin_trading(
         "short_sale": {
             "latest_balance": int(latest_short),
             "period_change": int(latest_short - first_short),
-            "latest_daily_change": int(
-                latest_short - float(latest["ShortSaleYesterdayBalance"])
-            ),
+            "latest_daily_change": int(latest_short - float(latest["ShortSaleYesterdayBalance"])),
             "period_sell": sum(int(row["ShortSaleSell"]) for row in ordered),
             "period_buy": sum(int(row["ShortSaleBuy"]) for row in ordered),
-            "period_cash_repayment": sum(
-                int(row["ShortSaleCashRepayment"]) for row in ordered
-            ),
+            "period_cash_repayment": sum(int(row["ShortSaleCashRepayment"]) for row in ordered),
         },
     }
 
