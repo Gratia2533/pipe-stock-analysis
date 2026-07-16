@@ -6,12 +6,65 @@
 
 ## 這個 repo 的定位
 
-每個人部署自己的 instance，不會把使用者導向維護者的 server、不內建 FinMind token，也不要求使用任何代管帳號。
+每個人部署自己的 instance。本專案不會把使用者導向維護者的 server、不內建 API credential、不強制使用 OpenConnector，也不要求任何代管帳號。
 
-- `FINMIND_TOKEN` 與 `FINNHUB_API_KEY` 只存放於專用 OpenConnector 的加密 credential store。
-- 本服務只持有 OpenConnector runtime token，且只能呼叫明確允許的金融 Actions。
+- 公開版預設直接讀取本機 `.env`，呼叫 FinMind 與 Finnhub。
+- FinMind 可不填 token，以較低的匿名額度使用；Finnhub 工具則需要使用者自己的 API key。
+- 進階部署可選擇 OpenConnector Adapter，讓本服務只持有最小權限 runtime token。
 - `.env`、OAuth state、私鑰、SQLite 資料庫與自動產生的憑證都被 Git 忽略。
-- FinMind 是可選項，但匿名額度較低。請自行到 [FinMind](https://finmindtrade.com/) 取得 token。
+
+## 三步自架
+
+```bash
+# 1. Clone
+git clone https://github.com/Gratia2533/pipe-stock-analysis.git && cd pipe-stock-analysis
+
+# 2. 建立本機設定；視需要填入 FINMIND_TOKEN／FINNHUB_API_KEY
+cp .env.example .env
+
+# 3. 使用預設 Direct Adapter 與標準 Docker bridge network 啟動
+docker compose up -d --build
+```
+
+驗證：
+
+```bash
+curl http://127.0.0.1:8010/healthz
+```
+
+MCP endpoint：`http://127.0.0.1:8010/mcp`
+
+宿主機只會在 `127.0.0.1` 發布 MCP。不要把未驗證的 MCP endpoint 直接暴露至公網。
+
+## 資料後端
+
+### Direct（預設）
+
+```dotenv
+DATA_BACKEND=direct
+FINMIND_TOKEN=
+FINNHUB_API_KEY=
+```
+
+即使未提供這兩個選用 credential，服務仍可啟動，TWSE、TPEx、MOPS、新聞與確定性分析功能可以繼續使用。FinMind token 留空時使用匿名額度；未設定 `FINNHUB_API_KEY` 時，只有實際呼叫 Finnhub 工具才會收到明確的設定錯誤。
+
+### OpenConnector（進階，Linux／WSL）
+
+此模式適合已有專用 OpenConnector，且其中提供固定 FinMind／Finnhub Actions 的部署。進階 Compose 只會注入 runtime token；上游 credential 保留在 OpenConnector 加密 credential store。為了維持 fail-closed 隔離，此模式下必須清除 `FINMIND_TOKEN` 與 `FINNHUB_API_KEY`。
+
+```dotenv
+DATA_BACKEND=openconnector
+OPEN_CONNECTOR_BASE_URL=http://127.0.0.1:8001
+OPEN_CONNECTOR_RUNTIME_TOKEN=your-local-runtime-token
+```
+
+bridge container 無法連線到只綁定宿主機 loopback 的 connector，因此進階 Compose 刻意使用 Linux／WSL host networking，並讓兩個服務繼續只綁定 `127.0.0.1`：
+
+```bash
+docker compose -f compose.openconnector.yaml up -d --build
+```
+
+Direct 與 OpenConnector 模式共用相同 MCP tools 與 analytics；OpenConnector 只是 Adapter，不是另一個 branch 或 repository。
 
 ## 提供的工具
 
@@ -22,22 +75,6 @@
 - MOPS 重大訊息與近期新聞
 - 可重現的技術面、基本面、財務健康、法人流向與融資融券摘要
 - Finnhub 全球股票代碼搜尋、報價、K 線、公司資料、財務指標、財報與公司新聞
-
-## 快速啟動：Docker Compose
-
-```bash
-git clone https://github.com/Gratia2533/pipe-stock-analysis.git
-cd pipe-stock-analysis
-cp .env.example .env
-# 將 .env 指向專用 OpenConnector，且只填入它的 runtime token
-
-docker compose up -d --build
-curl http://127.0.0.1:8010/healthz
-```
-
-MCP endpoint：`http://127.0.0.1:8010/mcp`
-
-Compose 使用 Linux／WSL host networking，讓 container 能存取 `127.0.0.1:8001` 的專用 connector；MCP 本身仍只綁定 `127.0.0.1:8010`。不要把未驗證的 MCP endpoint 直接暴露在公網。
 
 ## 本機開發
 

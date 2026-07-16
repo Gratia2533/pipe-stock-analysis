@@ -6,12 +6,65 @@ Self-hostable, read-only financial-market **MCP (Model Context Protocol, a stand
 
 ## Why this repository exists
 
-Run your own instance. This project does **not** route other people to the maintainer's server, bundle a FinMind token, or require a hosted account.
+Run your own instance. This project does **not** route other people to the maintainer's server, bundle API credentials, require OpenConnector, or require a hosted account.
 
-- Your `FINMIND_TOKEN` and `FINNHUB_API_KEY` stay in a dedicated OpenConnector encrypted credential store.
-- This process receives only an OpenConnector runtime token and can call only the curated finance Action allowlist.
+- The public default calls FinMind and Finnhub directly with credentials from your local `.env`.
+- FinMind is optional and supports anonymous access with lower limits. Finnhub-backed tools require your own API key.
+- Advanced deployments can select the OpenConnector adapter so this process holds only a narrow runtime token.
 - `.env`, OAuth state, private keys, SQLite databases, and generated credentials are ignored by Git.
-- FinMind is optional, but anonymous usage has lower limits. Get your own token from [FinMind](https://finmindtrade.com/).
+
+## Three-step self-hosting
+
+```bash
+# 1. Clone
+git clone https://github.com/Gratia2533/pipe-stock-analysis.git && cd pipe-stock-analysis
+
+# 2. Create local configuration; optionally add FINMIND_TOKEN / FINNHUB_API_KEY
+cp .env.example .env
+
+# 3. Start with the default Direct adapter on a standard Docker bridge network
+docker compose up -d --build
+```
+
+Verify:
+
+```bash
+curl http://127.0.0.1:8010/healthz
+```
+
+MCP endpoint: `http://127.0.0.1:8010/mcp`
+
+The host publishes the MCP only on `127.0.0.1`. Do not expose an unauthenticated MCP endpoint directly to the public internet.
+
+## Data backends
+
+### Direct (default)
+
+```dotenv
+DATA_BACKEND=direct
+FINMIND_TOKEN=
+FINNHUB_API_KEY=
+```
+
+The service starts without either optional credential, so TWSE, TPEx, MOPS, news, and deterministic analytics remain available. FinMind uses anonymous limits when its token is empty. A Finnhub tool reports a configuration error only when called without `FINNHUB_API_KEY`.
+
+### OpenConnector (advanced, Linux/WSL)
+
+Use this mode when a dedicated OpenConnector already exposes the curated FinMind and Finnhub Actions. The advanced Compose injects only its runtime token; upstream credentials remain in OpenConnector's encrypted credential store. For fail-closed separation, `FINMIND_TOKEN` and `FINNHUB_API_KEY` must be unset in this mode.
+
+```dotenv
+DATA_BACKEND=openconnector
+OPEN_CONNECTOR_BASE_URL=http://127.0.0.1:8001
+OPEN_CONNECTOR_RUNTIME_TOKEN=your-local-runtime-token
+```
+
+Because a bridged container cannot reach a connector bound to host loopback, the advanced Compose file intentionally uses Linux/WSL host networking while both services remain bound to `127.0.0.1`:
+
+```bash
+docker compose -f compose.openconnector.yaml up -d --build
+```
+
+Direct and OpenConnector modes use the same MCP tools and analytics code. OpenConnector is an adapter, not a separate branch or repository.
 
 ## Tools
 
@@ -22,22 +75,6 @@ Run your own instance. This project does **not** route other people to the maint
 - MOPS material announcements and recent news
 - Deterministic technical, fundamental, financial-health, institutional-flow, and margin summaries
 - Finnhub global symbol search, quotes, candles, company profiles, financial metrics, reported statements, and company news
-
-## Quick start: Docker Compose
-
-```bash
-git clone https://github.com/Gratia2533/pipe-stock-analysis.git
-cd pipe-stock-analysis
-cp .env.example .env
-# Point .env at your dedicated OpenConnector and add only its runtime token.
-
-docker compose up -d --build
-curl http://127.0.0.1:8010/healthz
-```
-
-MCP endpoint: `http://127.0.0.1:8010/mcp`
-
-The Compose setup uses Linux/WSL host networking so the container can reach the dedicated connector at `127.0.0.1:8001`; the MCP itself still binds only to `127.0.0.1:8010`. Do not expose an unauthenticated MCP endpoint to the public internet.
 
 ## Local development
 
