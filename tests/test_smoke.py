@@ -4,19 +4,25 @@ from finance_mcp.config import Settings
 from finance_mcp.server import health, mcp
 
 
-def test_default_settings_disable_oauth() -> None:
+def test_default_settings_disable_oauth(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPEN_CONNECTOR_RUNTIME_TOKEN", raising=False)
     settings = Settings.from_env()
 
     assert settings.finance_oauth_enabled is False
     assert settings.finance_oauth_issuer_url == ""
     assert settings.finance_oauth_resource_url == ""
-    assert settings.finnhub_base_url == "https://finnhub.io/api/v1"
+    assert settings.open_connector_base_url == "http://127.0.0.1:8001"
+    assert settings.open_connector_runtime_token == ""
+    assert settings.open_connector_max_response_bytes == 4 * 1024 * 1024
+    assert settings.mcp_port == 8010
 
 
-def test_finnhub_api_key_is_loaded_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FINNHUB_API_KEY", "test-key")
+def test_open_connector_runtime_token_is_loaded_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPEN_CONNECTOR_RUNTIME_TOKEN", "test-runtime-token")
 
-    assert Settings.from_env().finnhub_api_key == "test-key"
+    assert Settings.from_env().open_connector_runtime_token == "test-runtime-token"
 
 
 def test_health_is_read_only() -> None:
