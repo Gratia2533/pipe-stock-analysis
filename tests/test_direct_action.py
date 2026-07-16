@@ -241,9 +241,12 @@ async def test_direct_action_retries_retryable_status() -> None:
 
     client = _client(handler=handler, max_attempts=2)
 
-    assert await client.call(
-        "finmind.get_stock_prices", {"stockId": "2330", "startDate": "2026-07-01"}
-    ) == []
+    assert (
+        await client.call(
+            "finmind.get_stock_prices", {"stockId": "2330", "startDate": "2026-07-01"}
+        )
+        == []
+    )
     assert attempts == 2
     await client.aclose()
 

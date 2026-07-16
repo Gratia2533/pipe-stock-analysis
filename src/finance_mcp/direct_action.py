@@ -79,8 +79,7 @@ class DirectActionClient:
     async def call(self, action_id: str, action_input: dict[str, Any]) -> Any:
         normalized_input = _normalize_action_input(action_id, action_input)
         cache_key = (
-            f"{action_id}:"
-            f"{json.dumps(normalized_input, sort_keys=True, separators=(',', ':'))}"
+            f"{action_id}:{json.dumps(normalized_input, sort_keys=True, separators=(',', ':'))}"
         )
         cached = await self._cache.get(cache_key)
         if cached is not None:
@@ -104,9 +103,7 @@ class DirectActionClient:
         if end_date is not None:
             params["end_date"] = end_date
         headers = (
-            {"Authorization": f"Bearer {self._finmind_token}"}
-            if self._finmind_token
-            else None
+            {"Authorization": f"Bearer {self._finmind_token}"} if self._finmind_token else None
         )
         payload = await self._get_json(
             _FINMIND_URL,
@@ -243,9 +240,7 @@ def _normalize_action_input(action_id: str, action_input: dict[str, Any]) -> dic
         return {
             "symbol": _required_string(action_input, "symbol"),
             "statement": _required_enum(action_input, "statement", {"bs", "ic", "cf"}),
-            "frequency": _required_enum(
-                action_input, "frequency", {"annual", "quarterly"}
-            ),
+            "frequency": _required_enum(action_input, "frequency", {"annual", "quarterly"}),
         }
 
     if action_id == "finnhub.get_stock_candles":

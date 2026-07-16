@@ -98,9 +98,7 @@ class TwseClient:
         self._market_index_url = market_index_url or settings.twse_market_index_url
         self._etf_ranking_url = etf_ranking_url or settings.twse_etf_ranking_url
         self._new_listing_url = new_listing_url or settings.twse_new_listing_url
-        self._holiday_schedule_url = (
-            holiday_schedule_url or settings.twse_holiday_schedule_url
-        )
+        self._holiday_schedule_url = holiday_schedule_url or settings.twse_holiday_schedule_url
         self._http = JsonHttpClient(
             timeout_seconds=timeout or settings.request_timeout_seconds,
             max_attempts=max_attempts or settings.request_max_attempts,
@@ -139,8 +137,7 @@ class TwseClient:
                     "date": month.strftime("%Y%m01"),
                     "stockNo": stock_id,
                 },
-                cache_predicate=lambda value: isinstance(value, dict)
-                and value.get("stat") == "OK",
+                cache_predicate=lambda value: isinstance(value, dict) and value.get("stat") == "OK",
                 provider="twse",
                 dataset=f"STOCK_DAY:{month:%Y-%m}",
             )
@@ -302,18 +299,10 @@ class TwseClient:
             "application_date": _parse_optional_compact_roc_date(
                 str(row.get("ApplicationDate", ""))
             ),
-            "committee_date": _parse_optional_compact_roc_date(
-                str(row.get("CommitteeDate", ""))
-            ),
-            "approved_date": _parse_optional_compact_roc_date(
-                str(row.get("ApprovedDate", ""))
-            ),
-            "agreement_date": _parse_optional_compact_roc_date(
-                str(row.get("AgreementDate", ""))
-            ),
-            "listing_date": _parse_optional_compact_roc_date(
-                str(row.get("ListingDate", ""))
-            ),
+            "committee_date": _parse_optional_compact_roc_date(str(row.get("CommitteeDate", ""))),
+            "approved_date": _parse_optional_compact_roc_date(str(row.get("ApprovedDate", ""))),
+            "agreement_date": _parse_optional_compact_roc_date(str(row.get("AgreementDate", ""))),
+            "listing_date": _parse_optional_compact_roc_date(str(row.get("ListingDate", ""))),
             "approved_listing_date": _parse_optional_compact_roc_date(
                 str(row.get("ApprovedListingDate", ""))
             ),
@@ -322,9 +311,7 @@ class TwseClient:
                 str(row.get("AmountofCapital ", row.get("AmountofCapital", "")))
             ),
             "underwriter": str(row.get("Underwriter", "")).strip() or None,
-            "underwriting_price": _parse_optional_float(
-                str(row.get("UnderwritingPrice", ""))
-            ),
+            "underwriting_price": _parse_optional_float(str(row.get("UnderwritingPrice", ""))),
             "note": str(row.get("Note", "")).strip() or None,
             "source": "TWSE/newlisting",
         }
