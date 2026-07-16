@@ -42,10 +42,9 @@ def _get_transport() -> McpTransport:
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    finmind_base_url: str
-    finmind_token: str | None
-    finnhub_base_url: str
-    finnhub_api_key: str | None
+    open_connector_base_url: str
+    open_connector_runtime_token: str
+    open_connector_max_response_bytes: int
     twse_stock_day_url: str
     twse_daily_all_url: str
     twse_market_index_url: str
@@ -84,13 +83,11 @@ class Settings:
         if timeout == 0:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than zero")
         return cls(
-            finmind_base_url=os.getenv(
-                "FINMIND_BASE_URL",
-                "https://api.finmindtrade.com/api/v4/data",
+            open_connector_base_url=os.getenv("OPEN_CONNECTOR_BASE_URL", "http://127.0.0.1:8001"),
+            open_connector_runtime_token=os.getenv("OPEN_CONNECTOR_RUNTIME_TOKEN", ""),
+            open_connector_max_response_bytes=_get_positive_int(
+                "OPEN_CONNECTOR_MAX_RESPONSE_BYTES", 4 * 1024 * 1024
             ),
-            finmind_token=os.getenv("FINMIND_TOKEN"),
-            finnhub_base_url=os.getenv("FINNHUB_BASE_URL", "https://finnhub.io/api/v1"),
-            finnhub_api_key=os.getenv("FINNHUB_API_KEY"),
             twse_stock_day_url=os.getenv(
                 "TWSE_STOCK_DAY_URL",
                 "https://www.twse.com.tw/exchangeReport/STOCK_DAY",
@@ -146,7 +143,7 @@ class Settings:
             cache_max_entries=_get_positive_int("CACHE_MAX_ENTRIES", 256),
             mcp_transport=_get_transport(),
             mcp_host=os.getenv("MCP_HOST", "127.0.0.1"),
-            mcp_port=int(os.getenv("MCP_PORT", "8000")),
+            mcp_port=_get_positive_int("MCP_PORT", 8010),
             mcp_streamable_http_path=os.getenv("MCP_STREAMABLE_HTTP_PATH", "/mcp"),
             mcp_stateless_http=_get_bool("MCP_STATELESS_HTTP", True),
             finance_oauth_enabled=_get_bool("FINANCE_OAUTH_ENABLED", False),

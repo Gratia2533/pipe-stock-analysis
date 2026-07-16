@@ -20,6 +20,7 @@ from finance_mcp.analytics.technical import summarize_prices
 from finance_mcp.config import settings
 from finance_mcp.infra.logging import configure_logging, log_context
 from finance_mcp.oauth import FinanceOAuthProvider
+from finance_mcp.open_connector import OpenConnectorClient
 from finance_mcp.providers.announcements import MaterialAnnouncementClient
 from finance_mcp.providers.finmind import FinMindClient
 from finance_mcp.providers.finnhub import (
@@ -37,6 +38,7 @@ OfficialMarket = Literal["auto", "twse", "tpex"]
 
 configure_logging()
 logger = logging.getLogger("finance_mcp.server")
+
 
 def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
     common_options = {
@@ -86,17 +88,19 @@ def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
 
 
 mcp, oauth_provider = _create_mcp()
-client = FinMindClient()
-finnhub_client = FinnhubClient(
-    base_url=settings.finnhub_base_url,
-    api_key=settings.finnhub_api_key,
-    timeout_seconds=settings.request_timeout_seconds,
+connector_client = OpenConnectorClient(
+    base_url=settings.open_connector_base_url,
+    runtime_token=settings.open_connector_runtime_token,
+    timeout=settings.request_timeout_seconds,
     max_attempts=settings.request_max_attempts,
     retry_base_seconds=settings.request_retry_base_seconds,
     max_concurrency=settings.request_max_concurrency,
     cache_ttl_seconds=settings.cache_ttl_seconds,
     cache_max_entries=settings.cache_max_entries,
+    max_response_bytes=settings.open_connector_max_response_bytes,
 )
+client = FinMindClient(connector=connector_client)
+finnhub_client = FinnhubClient(connector=connector_client)
 twse_client = TwseClient()
 tpex_client = TpexClient()
 announcement_client = MaterialAnnouncementClient()
@@ -256,9 +260,7 @@ async def get_global_stock_profile(symbol: str) -> dict[str, object]:
 
 
 @mcp.tool()
-async def get_global_stock_basic_financials(
-    symbol: str, metric: str = "all"
-) -> dict[str, object]:
+async def get_global_stock_basic_financials(symbol: str, metric: str = "all") -> dict[str, object]:
     """Get Finnhub basic financial metrics for a global stock symbol."""
     return await finnhub_client.fetch_basic_financials(symbol.strip().upper(), metric)
 
@@ -323,11 +325,7 @@ async def get_taiwan_stock_market_indices(
     rows = await twse_client.fetch_market_indices()
     if query and query.strip():
         normalized_query = query.strip().casefold()
-        rows = [
-            row
-            for row in rows
-            if normalized_query in str(row.get("name", "")).casefold()
-        ]
+        rows = [row for row in rows if normalized_query in str(row.get("name", "")).casefold()]
     return rows[:limit]
 
 
@@ -415,11 +413,7 @@ async def get_taiwan_stock_material_announcements(
     if include_details:
         return selected
     return [
-        {
-            key: value
-            for key, value in row.items()
-            if key != "details"
-        }
+        {key: value for key, value in row.items() if key != "details"}
         | {"details_available": bool(row.get("details"))}
         for row in selected
     ]

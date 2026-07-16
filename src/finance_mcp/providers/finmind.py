@@ -1,43 +1,28 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Protocol
 
-import httpx
 
-from finance_mcp.config import settings
-from finance_mcp.infra.http import JsonHttpClient
+class ActionClient(Protocol):
+    async def call(self, action_id: str, action_input: dict[str, Any]) -> Any: ...
+
+
+_DATASET_ACTIONS = {
+    "TaiwanStockPrice": "finmind.get_stock_prices",
+    "TaiwanStockPER": "finmind.get_stock_valuation",
+    "TaiwanStockMonthRevenue": "finmind.get_monthly_revenue",
+    "TaiwanStockInstitutionalInvestorsBuySell": "finmind.get_institutional_flows",
+    "TaiwanStockFinancialStatements": "finmind.get_financial_statements",
+    "TaiwanStockBalanceSheet": "finmind.get_balance_sheet",
+    "TaiwanStockCashFlowsStatement": "finmind.get_cash_flow_statement",
+    "TaiwanStockMarginPurchaseShortSale": "finmind.get_margin_trading",
+}
 
 
 class FinMindClient:
-    def __init__(
-        self,
-        *,
-        base_url: str | None = None,
-        token: str | None = None,
-        timeout: float | None = None,
-        transport: httpx.AsyncBaseTransport | None = None,
-        max_attempts: int | None = None,
-        retry_base_seconds: float | None = None,
-        cache_ttl_seconds: float | None = None,
-    ) -> None:
-        self._base_url = base_url or settings.finmind_base_url
-        self._token = token if token is not None else settings.finmind_token
-        self._http = JsonHttpClient(
-            timeout_seconds=timeout or settings.request_timeout_seconds,
-            max_attempts=max_attempts or settings.request_max_attempts,
-            retry_base_seconds=(
-                settings.request_retry_base_seconds
-                if retry_base_seconds is None
-                else retry_base_seconds
-            ),
-            max_concurrency=settings.request_max_concurrency,
-            cache_ttl_seconds=(
-                settings.cache_ttl_seconds if cache_ttl_seconds is None else cache_ttl_seconds
-            ),
-            cache_max_entries=settings.cache_max_entries,
-            transport=transport,
-        )
+    def __init__(self, *, connector: ActionClient) -> None:
+        self._connector = connector
 
     async def fetch_dataset(
         self,
@@ -47,33 +32,22 @@ class FinMindClient:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> list[dict[str, Any]]:
-        params: dict[str, str] = {"dataset": dataset}
-        if stock_id is not None:
-            params["data_id"] = stock_id
-        if start_date is not None:
-            params["start_date"] = start_date.isoformat()
+        action_id = _DATASET_ACTIONS.get(dataset)
+        if action_id is None:
+            raise ValueError(f"unsupported FinMind dataset: {dataset}")
+        if stock_id is None or start_date is None:
+            raise ValueError("stock_id and start_date are required")
+
+        action_input: dict[str, Any] = {
+            "stockId": stock_id,
+            "startDate": start_date.isoformat(),
+        }
         if end_date is not None:
-            params["end_date"] = end_date.isoformat()
-
-        headers = {"Authorization": f"Bearer {self._token}"} if self._token else None
-        payload = await self._http.get_json(
-            self._base_url,
-            params=params,
-            headers=headers,
-            cache_predicate=lambda value: isinstance(value, dict)
-            and value.get("status") == 200,
-            provider="finmind",
-            dataset=dataset,
-        )
-        if not isinstance(payload, dict):
-            raise RuntimeError(f"FinMind dataset {dataset} returned an invalid response")
-        if payload.get("status") != 200:
-            raise RuntimeError(payload.get("msg") or f"FinMind dataset {dataset} request failed")
-
-        data = payload.get("data", [])
-        if not isinstance(data, list):
+            action_input["endDate"] = end_date.isoformat()
+        payload = await self._connector.call(action_id, action_input)
+        if not isinstance(payload, list) or any(not isinstance(row, dict) for row in payload):
             raise RuntimeError(f"FinMind dataset {dataset} returned an invalid data payload")
-        return data
+        return payload
 
     async def fetch_stock_prices(
         self,
@@ -82,10 +56,7 @@ class FinMindClient:
         end_date: date | None = None,
     ) -> list[dict[str, Any]]:
         return await self.fetch_dataset(
-            "TaiwanStockPrice",
-            stock_id=stock_id,
-            start_date=start_date,
-            end_date=end_date,
+            "TaiwanStockPrice", stock_id=stock_id, start_date=start_date, end_date=end_date
         )
 
     async def fetch_stock_valuation(
@@ -95,10 +66,7 @@ class FinMindClient:
         end_date: date | None = None,
     ) -> list[dict[str, Any]]:
         return await self.fetch_dataset(
-            "TaiwanStockPER",
-            stock_id=stock_id,
-            start_date=start_date,
-            end_date=end_date,
+            "TaiwanStockPER", stock_id=stock_id, start_date=start_date, end_date=end_date
         )
 
     async def fetch_monthly_revenue(
