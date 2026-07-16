@@ -32,3 +32,4 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+/PROJECT_STATUS.md
