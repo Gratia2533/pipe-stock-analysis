@@ -12,6 +12,7 @@ from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from finance_mcp.action_client import create_action_client
 from finance_mcp.analytics.chip import summarize_institutional_flows
 from finance_mcp.analytics.financial_health import summarize_financial_health
 from finance_mcp.analytics.fundamental import summarize_monthly_revenue, summarize_valuation
@@ -20,7 +21,6 @@ from finance_mcp.analytics.technical import summarize_prices
 from finance_mcp.config import settings
 from finance_mcp.infra.logging import configure_logging, log_context
 from finance_mcp.oauth import FinanceOAuthProvider
-from finance_mcp.open_connector import OpenConnectorClient
 from finance_mcp.providers.announcements import MaterialAnnouncementClient
 from finance_mcp.providers.finmind import FinMindClient
 from finance_mcp.providers.finnhub import (
@@ -88,19 +88,9 @@ def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:
 
 
 mcp, oauth_provider = _create_mcp()
-connector_client = OpenConnectorClient(
-    base_url=settings.open_connector_base_url,
-    runtime_token=settings.open_connector_runtime_token,
-    timeout=settings.request_timeout_seconds,
-    max_attempts=settings.request_max_attempts,
-    retry_base_seconds=settings.request_retry_base_seconds,
-    max_concurrency=settings.request_max_concurrency,
-    cache_ttl_seconds=settings.cache_ttl_seconds,
-    cache_max_entries=settings.cache_max_entries,
-    max_response_bytes=settings.open_connector_max_response_bytes,
-)
-client = FinMindClient(connector=connector_client)
-finnhub_client = FinnhubClient(connector=connector_client)
+action_client = create_action_client(settings)
+client = FinMindClient(connector=action_client)
+finnhub_client = FinnhubClient(connector=action_client)
 twse_client = TwseClient()
 tpex_client = TpexClient()
 announcement_client = MaterialAnnouncementClient()

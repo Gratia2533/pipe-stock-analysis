@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Literal, cast
 
 McpTransport = Literal["stdio", "streamable-http"]
+DataBackend = Literal["direct", "openconnector"]
 
 
 def _get_bool(name: str, default: bool) -> bool:
@@ -26,6 +27,17 @@ def _get_positive_int(name: str, default: int) -> int:
     return value
 
 
+def _get_upstream_max_response_bytes() -> int:
+    raw_value = os.getenv(
+        "UPSTREAM_MAX_RESPONSE_BYTES",
+        os.getenv("OPEN_CONNECTOR_MAX_RESPONSE_BYTES", str(4 * 1024 * 1024)),
+    )
+    value = int(raw_value)
+    if value <= 0:
+        raise ValueError("UPSTREAM_MAX_RESPONSE_BYTES must be greater than zero")
+    return value
+
+
 def _get_non_negative_float(name: str, default: float) -> float:
     value = float(os.getenv(name, str(default)))
     if value < 0:
@@ -40,11 +52,21 @@ def _get_transport() -> McpTransport:
     return cast(McpTransport, value)
 
 
+def _get_data_backend() -> DataBackend:
+    value = os.getenv("DATA_BACKEND", "direct").strip().lower()
+    if value not in {"direct", "openconnector"}:
+        raise ValueError("DATA_BACKEND must be 'direct' or 'openconnector'")
+    return cast(DataBackend, value)
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
+    data_backend: DataBackend
+    finmind_token: str
+    finnhub_api_key: str
     open_connector_base_url: str
     open_connector_runtime_token: str
-    open_connector_max_response_bytes: int
+    upstream_max_response_bytes: int
     twse_stock_day_url: str
     twse_daily_all_url: str
     twse_market_index_url: str
@@ -82,12 +104,22 @@ class Settings:
         timeout = _get_non_negative_float("REQUEST_TIMEOUT_SECONDS", 15.0)
         if timeout == 0:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than zero")
+        data_backend = _get_data_backend()
+        finmind_token = os.getenv("FINMIND_TOKEN", "").strip()
+        finnhub_api_key = os.getenv("FINNHUB_API_KEY", "").strip()
+        if data_backend == "openconnector" and (finmind_token or finnhub_api_key):
+            raise ValueError(
+                "Direct provider credentials must be unset when DATA_BACKEND=openconnector"
+            )
         return cls(
-            open_connector_base_url=os.getenv("OPEN_CONNECTOR_BASE_URL", "http://127.0.0.1:8001"),
-            open_connector_runtime_token=os.getenv("OPEN_CONNECTOR_RUNTIME_TOKEN", ""),
-            open_connector_max_response_bytes=_get_positive_int(
-                "OPEN_CONNECTOR_MAX_RESPONSE_BYTES", 4 * 1024 * 1024
+            data_backend=data_backend,
+            finmind_token=finmind_token if data_backend == "direct" else "",
+            finnhub_api_key=finnhub_api_key if data_backend == "direct" else "",
+            open_connector_base_url=os.getenv(
+                "OPEN_CONNECTOR_BASE_URL", "http://127.0.0.1:8001"
             ),
+            open_connector_runtime_token=os.getenv("OPEN_CONNECTOR_RUNTIME_TOKEN", ""),
+            upstream_max_response_bytes=_get_upstream_max_response_bytes(),
             twse_stock_day_url=os.getenv(
                 "TWSE_STOCK_DAY_URL",
                 "https://www.twse.com.tw/exchangeReport/STOCK_DAY",
