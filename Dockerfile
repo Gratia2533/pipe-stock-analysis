@@ -10,5 +10,5 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-EXPOSE 8010
-CMD ["uv", "run", "finance-mcp"]
+EXPOSE 8010 8011
+CMD ["/app/.venv/bin/finance-mcp"]

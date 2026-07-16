@@ -26,15 +26,23 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Verify:
+To enter a Finnhub API key without exposing it in shell history, use the interactive helper and choose whether to restart the services:
+
+```bash
+./scripts/set-finnhub-key.sh
+```
+
+Verify both local services:
 
 ```bash
 curl http://127.0.0.1:8010/healthz
+curl http://127.0.0.1:8011/healthz
 ```
 
-MCP endpoint: `http://127.0.0.1:8010/mcp`
+- Internal MCP without OAuth: `http://127.0.0.1:8010/mcp`
+- OAuth-protected MCP: `http://127.0.0.1:8011/mcp`
 
-The host publishes the MCP only on `127.0.0.1`. Do not expose an unauthenticated MCP endpoint directly to the public internet.
+Both endpoints are published only on `127.0.0.1`. Keep port 8010 private; expose only port 8011 through a public HTTPS reverse proxy or tunnel.
 
 ## Data backends
 
@@ -112,9 +120,11 @@ The reusable cross-market Hermes analysis workflow is included at [`skills/stock
 hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/stock-analysis/SKILL.md
 ```
 
-## Optional OAuth
+## OAuth deployment
 
-OAuth is off by default. If you enable it, you must supply your own public HTTPS issuer/resource URLs and credentials through deployment secrets. Runtime OAuth data belongs in a persistent private volume and is excluded by `.gitignore`.
+Compose starts a separate OAuth-protected instance on port 8011 while leaving the port 8010 instance available for trusted local clients. Set `FINANCE_OAUTH_ISSUER_URL`, `FINANCE_OAUTH_RESOURCE_URL`, `FINANCE_OAUTH_USERNAME`, and `FINANCE_OAUTH_PASSWORD` for the public deployment. OAuth runtime data is stored in a persistent private volume and excluded by `.gitignore`.
+
+The issuer and resource URLs must use the same public HTTPS hostname that forwards to `127.0.0.1:8011`.
 
 ## Verification
 

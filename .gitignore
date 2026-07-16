@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+/compose.gratia.yaml
 *.pem
 *.key
 *.p12

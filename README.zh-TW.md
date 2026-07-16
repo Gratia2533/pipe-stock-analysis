@@ -26,15 +26,23 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-驗證：
+若要避免 Finnhub API key 出現在 shell history，可使用互動式腳本安全輸入，並選擇是否立即重啟服務：
+
+```bash
+./scripts/set-finnhub-key.sh
+```
+
+驗證兩個本機服務：
 
 ```bash
 curl http://127.0.0.1:8010/healthz
+curl http://127.0.0.1:8011/healthz
 ```
 
-MCP endpoint：`http://127.0.0.1:8010/mcp`
+- 內部無 OAuth MCP：`http://127.0.0.1:8010/mcp`
+- OAuth 保護 MCP：`http://127.0.0.1:8011/mcp`
 
-宿主機只會在 `127.0.0.1` 發布 MCP。不要把未驗證的 MCP endpoint 直接暴露至公網。
+兩個 endpoint 都只發布在 `127.0.0.1`。8010 必須維持私有，只能透過公開 HTTPS reverse proxy 或 tunnel 對外暴露 8011。
 
 ## 資料後端
 
@@ -112,9 +120,11 @@ hermes mcp test pipe-stock-analysis
 hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-analysis/main/skills/stock-analysis/SKILL.md
 ```
 
-## 可選 OAuth
+## OAuth 部署
 
-OAuth 預設關閉。若要開啟，你必須自行提供公開 HTTPS issuer/resource URL 與登入憑證，並透過部署平台的 secrets 傳入。OAuth 執行期資料必須放在私有 persistent volume，且已列入 `.gitignore`。
+Compose 會另外在 8011 啟動 OAuth 保護版本，8010 則保留給可信任的本機 client。公開部署需設定 `FINANCE_OAUTH_ISSUER_URL`、`FINANCE_OAUTH_RESOURCE_URL`、`FINANCE_OAUTH_USERNAME` 與 `FINANCE_OAUTH_PASSWORD`。OAuth 執行期資料會存於私有 persistent volume，且已列入 `.gitignore`。
+
+Issuer 與 resource URL 必須使用同一個公開 HTTPS hostname，並轉送至 `127.0.0.1:8011`。
 
 ## 驗證
 
