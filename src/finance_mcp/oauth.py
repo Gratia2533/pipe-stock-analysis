@@ -30,6 +30,8 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
+from finance_mcp.oauth_network import pinned_http_transport
+
 
 class FinanceOAuthProvider(
     OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]
@@ -165,7 +167,7 @@ class FinanceOAuthProvider(
         return client
 
     @staticmethod
-    async def _validate_public_cimd_url(client_id: str) -> None:
+    async def _validate_public_cimd_url(client_id: str) -> tuple[str, ...]:
         parsed = urlsplit(client_id)
         decoded_path = unquote(parsed.path)
         if (
@@ -188,18 +190,26 @@ class FinanceOAuthProvider(
         )
         if not addresses:
             raise ValueError("CIMD hostname did not resolve")
+
+        public_addresses: list[str] = []
         for address in addresses:
-            if not ipaddress.ip_address(address[4][0]).is_global:
+            resolved_address = str(address[4][0])
+            if not ipaddress.ip_address(resolved_address).is_global:
                 raise ValueError("CIMD hostname resolves to a non-public address")
+            if resolved_address not in public_addresses:
+                public_addresses.append(resolved_address)
+        return tuple(public_addresses)
 
     async def _load_cimd_client(self, client_id: str) -> OAuthClientInformationFull | None:
         try:
-            await self._validate_public_cimd_url(client_id)
+            addresses = await self._validate_public_cimd_url(client_id)
+            transport = pinned_http_transport(client_id, addresses)
             async with (
                 httpx.AsyncClient(
                     timeout=httpx.Timeout(5.0, connect=3.0),
                     follow_redirects=False,
                     trust_env=False,
+                    transport=transport,
                 ) as client,
                 client.stream(
                     "GET",
@@ -228,15 +238,25 @@ class FinanceOAuthProvider(
             redirect_uris = metadata.get("redirect_uris")
             if not isinstance(redirect_uris, list) or not redirect_uris:
                 return None
-            if metadata.get("token_endpoint_auth_method", "none") != "none":
+            auth_method = metadata.get("token_endpoint_auth_method", "none")
+            if auth_method == "private_key_jwt":
+                jwks_uri = metadata.get("jwks_uri")
+                if not isinstance(jwks_uri, str):
+                    return None
+                await self._validate_public_cimd_url(jwks_uri)
+                if metadata.get("token_endpoint_auth_signing_alg", "RS256") != "RS256":
+                    return None
+            elif auth_method == "none":
+                metadata["token_endpoint_auth_method"] = "none"
+            else:
                 return None
-            metadata["token_endpoint_auth_method"] = "none"
             metadata["scope"] = self.scope
             return OAuthClientInformationFull.model_validate(metadata)
         except (
             httpx.HTTPError,
             json.JSONDecodeError,
             OSError,
+            RecursionError,
             ValidationError,
             ValueError,
         ):

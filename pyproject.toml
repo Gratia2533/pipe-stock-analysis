@@ -10,8 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["finance", "stocks", "mcp", "finmind", "finnhub", "market-data"]
 dependencies = [
+  "httpcore>=1,<2",
   "httpx>=0.28,<1",
   "mcp[cli]>=1.27,<2",
+  "pyjwt[crypto]>=2.13,<3",
 ]
 
 [project.scripts]

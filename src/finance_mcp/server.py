@@ -23,6 +23,10 @@ from finance_mcp.analytics.technical import summarize_prices
 from finance_mcp.config import settings
 from finance_mcp.infra.logging import configure_logging, log_context
 from finance_mcp.oauth import FinanceOAuthProvider
+from finance_mcp.oauth_client_auth import (
+    SUPPORTED_CLIENT_AUTH_METHODS,
+    PrivateKeyJWTClientAuthenticator,
+)
 from finance_mcp.providers.announcements import MaterialAnnouncementClient
 from finance_mcp.providers.finmind import FinMindClient
 from finance_mcp.providers.finnhub import (
@@ -66,18 +70,28 @@ def _oauth_transport_security(issuer_url: str) -> TransportSecuritySettings:
 
 
 def _enable_cimd_metadata() -> None:
-    """Advertise URL-based Client ID Metadata Document support."""
+    """Advertise CIMD and install private_key_jwt client authentication."""
     from mcp.server.auth import routes
 
     original_build_metadata = routes.build_metadata
+    if getattr(original_build_metadata, "_finance_cimd_enabled", False):
+        routes.ClientAuthenticator = PrivateKeyJWTClientAuthenticator
+        return
 
     def build_metadata_with_cimd(*args, **kwargs):
         metadata = original_build_metadata(*args, **kwargs)
+        supported_methods = list(SUPPORTED_CLIENT_AUTH_METHODS)
         metadata.client_id_metadata_document_supported = True
-        metadata.token_endpoint_auth_methods_supported = ["none"]
+        metadata.token_endpoint_auth_methods_supported = supported_methods
+        metadata.token_endpoint_auth_signing_alg_values_supported = ["RS256"]
+        if metadata.revocation_endpoint is not None:
+            metadata.revocation_endpoint_auth_methods_supported = supported_methods
+            metadata.revocation_endpoint_auth_signing_alg_values_supported = ["RS256"]
         return metadata
 
+    build_metadata_with_cimd._finance_cimd_enabled = True
     routes.build_metadata = build_metadata_with_cimd
+    routes.ClientAuthenticator = PrivateKeyJWTClientAuthenticator
 
 
 def _create_mcp() -> tuple[FastMCP, FinanceOAuthProvider | None]:

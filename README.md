@@ -124,7 +124,7 @@ hermes skills install https://raw.githubusercontent.com/Gratia2533/pipe-stock-an
 
 Compose starts a separate OAuth-protected instance on port 8011 while leaving the port 8010 instance available for trusted local clients. Set `FINANCE_OAUTH_ISSUER_URL`, `FINANCE_OAUTH_RESOURCE_URL`, `FINANCE_OAUTH_USERNAME`, and `FINANCE_OAUTH_PASSWORD` for the public deployment. OAuth runtime data is stored in a persistent private volume and excluded by `.gitignore`.
 
-The issuer and resource URLs must use the same public HTTPS hostname that forwards to `127.0.0.1:8011`.
+The issuer and resource URLs must use the same public HTTPS hostname that forwards to `127.0.0.1:8011`. The default OAuth deployment is a single server process; keep it single-process because `private_key_jwt` assertion replay protection uses a process-local JTI cache. A multi-worker deployment would require a shared replay cache.
 
 ## Verification
 
