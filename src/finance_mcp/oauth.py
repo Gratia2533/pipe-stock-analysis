@@ -166,6 +166,18 @@ class FinanceOAuthProvider(
             self._cimd_cache[client_id] = (time.monotonic() + 300, client)
         return client
 
+    def is_cimd_client(self, client_id: str) -> bool:
+        with self._lock, self._connect() as connection:
+            registered = connection.execute(
+                "SELECT 1 FROM oauth_clients WHERE client_id = ?",
+                (client_id,),
+            ).fetchone()
+        if registered is not None:
+            return False
+
+        cached = self._cimd_cache.get(client_id)
+        return cached is not None and cached[0] > time.monotonic()
+
     @staticmethod
     async def _validate_public_cimd_url(client_id: str) -> tuple[str, ...]:
         parsed = urlsplit(client_id)
@@ -471,6 +483,27 @@ button {{
             return None
         return code
 
+    @staticmethod
+    def _store_token_pair(
+        connection: sqlite3.Connection,
+        access_token: AccessToken,
+        refresh_token: RefreshToken,
+        resource: str,
+    ) -> None:
+        connection.execute(
+            "INSERT INTO oauth_access_tokens (token, payload) VALUES (?, ?)",
+            (access_token.token, access_token.model_dump_json()),
+        )
+        connection.execute(
+            "INSERT INTO oauth_refresh_tokens (token, payload) VALUES (?, ?)",
+            (refresh_token.token, refresh_token.model_dump_json()),
+        )
+        connection.execute(
+            "INSERT INTO oauth_token_pairs "
+            "(access_token, refresh_token, resource) VALUES (?, ?, ?)",
+            (access_token.token, refresh_token.token, resource),
+        )
+
     def _issue_token_pair(
         self,
         *,
@@ -478,6 +511,7 @@ button {{
         scopes: list[str],
         resource: str,
         subject: str | None,
+        connection: sqlite3.Connection | None = None,
     ) -> OAuthToken:
         now = int(time.time())
         access_value = f"mcp_at_{secrets.token_urlsafe(40)}"
@@ -498,20 +532,16 @@ button {{
             expires_at=now + self.refresh_token_ttl_seconds,
             subject=subject,
         )
-        with self._lock, self._connect() as connection:
-            connection.execute(
-                "INSERT INTO oauth_access_tokens (token, payload) VALUES (?, ?)",
-                (access_value, access_token.model_dump_json()),
-            )
-            connection.execute(
-                "INSERT INTO oauth_refresh_tokens (token, payload) VALUES (?, ?)",
-                (refresh_value, refresh_token.model_dump_json()),
-            )
-            connection.execute(
-                "INSERT INTO oauth_token_pairs "
-                "(access_token, refresh_token, resource) VALUES (?, ?, ?)",
-                (access_value, refresh_value, resource),
-            )
+        if connection is None:
+            with self._lock, self._connect() as owned_connection:
+                self._store_token_pair(
+                    owned_connection,
+                    access_token,
+                    refresh_token,
+                    resource,
+                )
+        else:
+            self._store_token_pair(connection, access_token, refresh_token, resource)
         return OAuthToken(
             access_token=access_value,
             token_type="Bearer",
@@ -528,17 +558,20 @@ button {{
         if not client.client_id or authorization_code.client_id != client.client_id:
             raise ValueError("Invalid OAuth authorization code")
         resource = authorization_code.resource or self.resource_url
-        token = self._issue_token_pair(
-            client_id=client.client_id,
-            scopes=authorization_code.scopes,
-            resource=resource,
-            subject=authorization_code.subject,
-        )
-        self._delete(
-            "oauth_authorization_codes",
-            "code",
-            authorization_code.code,
-        )
+        with self._lock, self._connect() as connection:
+            deleted = connection.execute(
+                "DELETE FROM oauth_authorization_codes WHERE code = ?",
+                (authorization_code.code,),
+            )
+            if deleted.rowcount != 1:
+                raise ValueError("Invalid OAuth authorization code")
+            token = self._issue_token_pair(
+                client_id=client.client_id,
+                scopes=authorization_code.scopes,
+                resource=resource,
+                subject=getattr(authorization_code, "subject", None),
+                connection=connection,
+            )
         return token
 
     async def load_access_token(self, token: str) -> AccessToken | None:

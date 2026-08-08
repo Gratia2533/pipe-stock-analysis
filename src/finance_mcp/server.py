@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import date, timedelta
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import urlsplit
 
 import httpx
@@ -72,6 +72,16 @@ def _oauth_transport_security(issuer_url: str) -> TransportSecuritySettings:
 def _enable_cimd_metadata() -> None:
     """Advertise CIMD and install private_key_jwt client authentication."""
     from mcp.server.auth import routes
+    from mcp.server.auth.handlers import revoke as revocation_handlers
+
+    revocation_request = revocation_handlers.RevocationRequest
+    if not getattr(revocation_request, "_finance_optional_client_secret", False):
+
+        class FinanceRevocationRequest(revocation_request):
+            _finance_optional_client_secret: ClassVar[bool] = True
+            client_secret: str | None = None
+
+        revocation_handlers.RevocationRequest = FinanceRevocationRequest
 
     original_build_metadata = routes.build_metadata
     if getattr(original_build_metadata, "_finance_cimd_enabled", False):

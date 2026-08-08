@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import threading
 import time
@@ -17,6 +18,8 @@ from starlette.requests import Request
 
 from finance_mcp.oauth import FinanceOAuthProvider
 from finance_mcp.oauth_network import pinned_http_transport
+
+logger = logging.getLogger("finance_mcp.oauth.client_auth")
 
 _ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 _MAX_JWKS_BYTES = 64 * 1024
@@ -47,6 +50,14 @@ class PrivateKeyJWTClientAuthenticator:
     async def authenticate_request(self, request: Request) -> OAuthClientInformationFull:
         form_data = await request.form()
         client_id = form_data.get("client_id")
+        assertion_type = form_data.get("client_assertion_type")
+        assertion = form_data.get("client_assertion")
+        logger.info(
+            "OAuth client auth field presence: client_id=%s assertion_type=%s assertion=%s",
+            "client_id" in form_data,
+            "client_assertion_type" in form_data,
+            "client_assertion" in form_data,
+        )
         if not isinstance(client_id, str) or not client_id:
             raise AuthenticationError("Missing client_id")
 
@@ -56,8 +67,29 @@ class PrivateKeyJWTClientAuthenticator:
         if client.token_endpoint_auth_method != "private_key_jwt":
             return await self._default_authenticator.authenticate_request(request)
 
-        assertion_type = form_data.get("client_assertion_type")
-        assertion = form_data.get("client_assertion")
+        assertion_type_provided = "client_assertion_type" in form_data
+        assertion_provided = "client_assertion" in form_data
+        if not assertion_type_provided and not assertion_provided:
+            grant_type = form_data.get("grant_type")
+            code = form_data.get("code")
+            code_verifier = form_data.get("code_verifier")
+            is_cimd_client = getattr(self.provider, "is_cimd_client", None)
+            if (
+                request.url.path != "/token"
+                or grant_type != "authorization_code"
+                or not isinstance(code, str)
+                or not code
+                or not isinstance(code_verifier, str)
+                or not code_verifier
+                or not callable(is_cimd_client)
+                or not is_cimd_client(client_id)
+            ):
+                raise AuthenticationError("Client assertion is required")
+            logger.info(
+                "CIMD client is using public-client authorization-code exchange; "
+                "S256 PKCE validation remains required"
+            )
+            return client
         if assertion_type != _ASSERTION_TYPE:
             raise AuthenticationError("Missing or invalid client_assertion_type")
         if not isinstance(assertion, str) or not assertion:
@@ -149,7 +181,8 @@ class PrivateKeyJWTClientAuthenticator:
             if not isinstance(jti, str) or not jti:
                 raise AuthenticationError("Client assertion jti is invalid")
             self._record_jti(client_id, jti, expires_at + _JWT_LEEWAY_SECONDS)
-        except AuthenticationError:
+        except AuthenticationError as exc:
+            logger.warning("OAuth client assertion rejected: %s", str(exc))
             raise
         except (
             httpx.HTTPError,
@@ -161,6 +194,10 @@ class PrivateKeyJWTClientAuthenticator:
             TypeError,
             jwt.PyJWTError,
         ) as exc:
+            logger.warning(
+                "OAuth client assertion rejected by validation exception: %s",
+                type(exc).__name__,
+            )
             raise AuthenticationError("Invalid client assertion") from exc
 
     @staticmethod

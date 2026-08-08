@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import ssl
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 from urllib.parse import quote, urlencode
@@ -12,10 +14,15 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
+from mcp.server.auth.handlers.revoke import RevocationHandler
+from mcp.server.auth.handlers.token import TokenHandler
 from mcp.server.auth.middleware.client_auth import AuthenticationError
 from mcp.shared.auth import OAuthClientInformationFull
+from starlette.applications import Starlette
 from starlette.requests import Request
+from starlette.routing import Route
 
+from finance_mcp.oauth import FinanceOAuthProvider
 from finance_mcp.oauth_client_auth import PrivateKeyJWTClientAuthenticator
 from finance_mcp.oauth_network import PinnedNetworkBackend
 from finance_mcp.server import _enable_cimd_metadata
@@ -29,11 +36,19 @@ ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 class Provider:
     issuer_url = ISSUER
 
-    def __init__(self, *clients: OAuthClientInformationFull) -> None:
+    def __init__(
+        self,
+        *clients: OAuthClientInformationFull,
+        cimd_client_ids: set[str] | None = None,
+    ) -> None:
         self.clients = {client.client_id: client for client in clients}
+        self.cimd_client_ids = cimd_client_ids or set()
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return self.clients.get(client_id)
+
+    def is_cimd_client(self, client_id: str) -> bool:
+        return client_id in self.cimd_client_ids
 
 
 class Stream:
@@ -84,7 +99,12 @@ class FakeNetworkStream:
         return None
 
 
-async def _request(form: dict[str, str], authorization: str | None = None) -> Request:
+async def _request(
+    form: dict[str, str],
+    authorization: str | None = None,
+    *,
+    path: str = "/token",
+) -> Request:
     body = urlencode(form).encode()
     headers = [(b"content-type", b"application/x-www-form-urlencoded")]
     if authorization is not None:
@@ -97,10 +117,22 @@ async def _request(form: dict[str, str], authorization: str | None = None) -> Re
         {
             "type": "http",
             "method": "POST",
-            "path": "/token",
+            "path": path,
             "headers": headers,
         },
         receive,
+    )
+
+
+def _auth_app(provider: Any) -> Starlette:
+    authenticator = PrivateKeyJWTClientAuthenticator(provider)
+    token_handler = TokenHandler(cast(Any, provider), cast(Any, authenticator))
+    revocation_handler = RevocationHandler(cast(Any, provider), cast(Any, authenticator))
+    return Starlette(
+        routes=[
+            Route("/token", token_handler.handle, methods=["POST"]),
+            Route("/revoke", revocation_handler.handle, methods=["POST"]),
+        ]
     )
 
 
@@ -202,6 +234,154 @@ async def test_authenticates_private_key_jwt_and_rejects_replay() -> None:
             await _authenticate(authenticator, assertion)
 
     assert authenticated.client_id == CLIENT_ID
+
+
+@pytest.mark.asyncio
+async def test_private_key_jwt_cimd_allows_authorization_code_pkce_fallback() -> None:
+    authenticator = PrivateKeyJWTClientAuthenticator(
+        Provider(_client(), cimd_client_ids={CLIENT_ID})
+    )
+
+    authenticated = await authenticator.authenticate_request(
+        await _request(
+            {
+                "client_id": CLIENT_ID,
+                "grant_type": "authorization_code",
+                "code": "authorization-code",
+                "code_verifier": "pkce-verifier",
+                "redirect_uri": "https://chatgpt.com/connector/oauth/callback",
+            }
+        )
+    )
+
+    assert authenticated.client_id == CLIENT_ID
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "form",
+    [
+        {"client_id": CLIENT_ID, "client_assertion_type": ASSERTION_TYPE},
+        {"client_id": CLIENT_ID, "client_assertion": "not-a-jwt"},
+        {"client_id": CLIENT_ID, "client_assertion_type": ""},
+        {"client_id": CLIENT_ID, "client_assertion": ""},
+        {
+            "client_id": CLIENT_ID,
+            "client_assertion_type": "",
+            "client_assertion": "",
+        },
+    ],
+)
+async def test_private_key_jwt_cimd_rejects_present_invalid_assertion_fields(
+    form: dict[str, str],
+) -> None:
+    authenticator = PrivateKeyJWTClientAuthenticator(
+        Provider(_client(), cimd_client_ids={CLIENT_ID})
+    )
+
+    with pytest.raises(AuthenticationError):
+        await authenticator.authenticate_request(await _request(form))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("form", "path"),
+    [
+        (
+            {
+                "client_id": CLIENT_ID,
+                "grant_type": "refresh_token",
+                "refresh_token": "refresh-token",
+            },
+            "/token",
+        ),
+        (
+            {
+                "client_id": CLIENT_ID,
+                "grant_type": "authorization_code",
+                "code": "authorization-code",
+                "code_verifier": "pkce-verifier",
+            },
+            "/revoke",
+        ),
+        (
+            {
+                "client_id": CLIENT_ID,
+                "grant_type": "authorization_code",
+                "code": "authorization-code",
+            },
+            "/token",
+        ),
+    ],
+)
+async def test_private_key_jwt_cimd_rejects_fallback_outside_token_code_pkce(
+    form: dict[str, str],
+    path: str,
+) -> None:
+    authenticator = PrivateKeyJWTClientAuthenticator(
+        Provider(_client(), cimd_client_ids={CLIENT_ID})
+    )
+
+    with pytest.raises(AuthenticationError):
+        await authenticator.authenticate_request(await _request(form, path=path))
+
+
+@pytest.mark.asyncio
+async def test_registered_private_key_jwt_client_cannot_use_public_fallback() -> None:
+    authenticator = PrivateKeyJWTClientAuthenticator(Provider(_client()))
+
+    with pytest.raises(AuthenticationError):
+        await authenticator.authenticate_request(
+            await _request(
+                {
+                    "client_id": CLIENT_ID,
+                    "grant_type": "authorization_code",
+                    "code": "authorization-code",
+                    "code_verifier": "pkce-verifier",
+                }
+            )
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "form"),
+    [
+        (
+            "/token",
+            {
+                "client_id": CLIENT_ID,
+                "grant_type": "refresh_token",
+                "refresh_token": "refresh-token",
+            },
+        ),
+        (
+            "/revoke",
+            {"client_id": CLIENT_ID, "token": "access-token"},
+        ),
+        (
+            "/token",
+            {
+                "client_id": CLIENT_ID,
+                "grant_type": "authorization_code",
+                "code": "authorization-code",
+                "code_verifier": "pkce-verifier",
+                "client_assertion_type": "",
+            },
+        ),
+    ],
+)
+async def test_http_handlers_reject_assertionless_non_code_and_empty_assertion(
+    path: str,
+    form: dict[str, str],
+) -> None:
+    provider = Provider(_client(), cimd_client_ids={CLIENT_ID})
+    transport = httpx.ASGITransport(app=_auth_app(provider))
+
+    async with httpx.AsyncClient(transport=transport, base_url=ISSUER) as client:
+        response = await client.post(path, data=form)
+
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -545,6 +725,58 @@ async def test_runtime_supports_every_advertised_non_jwt_auth_method(auth_method
     authenticated = await authenticator.authenticate_request(await _request(form, authorization))
 
     assert authenticated.client_id == CLIENT_ID
+
+
+@pytest.mark.asyncio
+async def test_private_key_jwt_revocation_without_client_secret_invalidates_token() -> None:
+    from mcp.server.auth.handlers import revoke as revocation_handlers
+
+    private_key, public_jwk = _key_pair()
+    assertion = _assertion(private_key, jti="revocation-assertion")
+    original_request_model = revocation_handlers.RevocationRequest
+    _enable_cimd_metadata()
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = FinanceOAuthProvider(
+                issuer_url=ISSUER,
+                resource_url=f"{ISSUER}/mcp",
+                username="user",
+                password="test",
+                database_path=str(Path(directory) / "state.sqlite3"),
+            )
+            client = _client()
+            provider._cimd_cache[CLIENT_ID] = (time.monotonic() + 300, client)
+            issued = provider._issue_token_pair(
+                client_id=CLIENT_ID,
+                scopes=["finance:read"],
+                resource=f"{ISSUER}/mcp",
+                subject="user",
+            )
+            transport = httpx.ASGITransport(app=_auth_app(provider))
+
+            with patch.object(
+                PrivateKeyJWTClientAuthenticator,
+                "_load_jwks",
+                new=AsyncMock(return_value=[public_jwk]),
+            ):
+                async with httpx.AsyncClient(transport=transport, base_url=ISSUER) as client_http:
+                    response = await client_http.post(
+                        "/revoke",
+                        data={
+                            "client_id": CLIENT_ID,
+                            "token": issued.access_token,
+                            "token_type_hint": "access_token",
+                            "client_assertion_type": ASSERTION_TYPE,
+                            "client_assertion": assertion,
+                        },
+                    )
+
+            remaining = await provider.load_access_token(issued.access_token)
+    finally:
+        revocation_handlers.RevocationRequest = original_request_model
+
+    assert response.status_code == 200
+    assert remaining is None
 
 
 def test_cimd_metadata_matches_token_and_revocation_runtime(monkeypatch) -> None:
